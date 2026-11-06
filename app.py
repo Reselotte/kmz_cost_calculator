@@ -166,10 +166,8 @@ def read_kmz_file(file_obj, name):
                     with open(path, "wb") as f:
                         f.write(kmz.read(kml))
                     try:
-                        layers = pyogrio.list_layers(path)
-                        for layer_info in layers:
-                            layer_name = layer_info[0] if isinstance(layer_info, tuple) else layer_info
-                            gdf = gpd.read_file(path, layer=layer_name, engine="pyogrio")
+                        for layer_name, _geom_type in pyogrio.list_layers(path):
+                            gdf = gpd.read_file(path, layer=str(layer_name), engine="pyogrio")
                             if not gdf.empty:
                                 loaded.append(gdf)
                     except Exception as exc:
