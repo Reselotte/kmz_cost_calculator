@@ -349,6 +349,8 @@ def header(step):
         '<p class="hero-sub">จัดการข้อมูลแปลง ตรวจสอบพิกัด และประเมินระยะทางกับค่าน้ำมันในการเดินทาง</p></div>',
         unsafe_allow_html=True,
     )
+    if not step:
+        return
     names = ["1. นำเข้าไฟล์ KMZ", "2. จำแนกหมู่บ้าน", "3. วิเคราะห์ข้อมูล"]
     html = '<div class="steps">'
     for i, n in enumerate(names, 1):
@@ -425,7 +427,88 @@ with st.sidebar:
 
 OLAT, OLON = st.session_state.office_lat, st.session_state.office_lon
 ONAME = st.session_state.office_name or "จุดเริ่มต้น"
+def parse_coord(s):
+    try:
+        lat, lon = [float(x) for x in s.replace(" ", "").split(",")]
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            return lat, lon
+    except Exception:
+        pass
+    return None
 
+
+def point_input(title, key, default=None):
+    """คืนค่า (lat, lon, ชื่อ) หรือ None ถ้ายังระบุไม่ครบ"""
+    st.markdown(f"**{title}**")
+    modes = (["ใช้จุดเริ่มต้นในแถบด้านซ้าย"] if default else []) + \
+            ["ค้นหาชื่อสถานที่", "วางพิกัดจาก Google Maps"]
+    mode = st.radio(title, modes, key=f"{key}_mode", horizontal=True, label_visibility="collapsed")
+    if default and mode == modes[0]:
+        st.caption(f"{default[2]} ({default[0]:.6f}, {default[1]:.6f})")
+        return default
+    if mode == "ค้นหาชื่อสถานที่":
+        c1, c2 = st.columns([3, 1])
+        q = c1.text_input("ชื่อสถานที่", key=f"{key}_q", label_visibility="collapsed",
+                          placeholder="เช่น ตลาดศรีเทพ เพชรบูรณ์")
+        if c2.button("ค้นหา", key=f"{key}_go", use_container_width=True):
+            try:
+                st.session_state[f"{key}_res"] = geocode(q.strip()) if q.strip() else []
+                if not st.session_state[f"{key}_res"]:
+                    st.warning("ไม่พบสถานที่ที่ค้นหา")
+            except Exception as exc:
+                st.error(f"ค้นหาไม่สำเร็จ: {exc}")
+        res = st.session_state.get(f"{key}_res", [])
+        if res:
+            name = st.selectbox("ผลการค้นหา", [r[0] for r in res], key=f"{key}_sel")
+            for n, la, lo in res:
+                if n == name:
+                    return la, lo, n
+        return None
+    txt = st.text_input("พิกัด", key=f"{key}_xy", label_visibility="collapsed",
+                        placeholder="13.685963, 100.621783")
+    if txt.strip():
+        p = parse_coord(txt)
+        if p:
+            return p[0], p[1], f"{p[0]:.5f}, {p[1]:.5f}"
+        st.warning("รูปแบบพิกัดไม่ถูกต้อง ตัวอย่าง: 13.685963, 100.621783")
+    return None
+
+
+def quick_calc():
+    st.markdown('<div class="note">คำนวณระยะทาง เวลา และค่าน้ำมันระหว่างสองจุดใดก็ได้ '
+                "ไม่ต้องอัปโหลดไฟล์ KMZ (ราคาน้ำมันและอัตราสิ้นเปลืองตั้งที่แถบด้านซ้าย)</div>",
+                unsafe_allow_html=True)
+    with st.container(border=True):
+        o = point_input("ต้นทาง", "qo", (OLAT, OLON, ONAME))
+        st.divider()
+        d = point_input("ปลายทาง", "qd")
+        st.divider()
+        c1, c2 = st.columns(2)
+        round_trip = c1.checkbox("ไป-กลับ", key="q_round")
+        trips = c2.number_input("จำนวนเที่ยว", min_value=1, value=1, step=1, key="q_trips")
+        avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True, key="q_avoid")
+    if st.button("คำนวณระยะทางและค่าเดินทาง", type="primary", use_container_width=True, key="q_go"):
+        if not o or not d:
+            st.warning("กรุณาระบุทั้งต้นทางและปลายทาง")
+        else:
+            try:
+                st.session_state.quick = {
+                    "route": get_route(o[1], o[0], d[1], d[0], True), "o": o, "d": d}
+            except Exception as exc:
+                st.error(f"ไม่สามารถคำนวณเส้นทางได้: {exc}")
+    q = st.session_state.get("quick")
+    if q:
+        rt, o2, d2 = q["route"], q["o"], q["d"]
+        mult = (2 if round_trip else 1) * int(trips)
+        st.caption(f"จาก {o2[2]} ไปยัง {d2[2]}")
+        show_route({"distance_km": rt["distance_km"] * mult,
+                    "duration_min": rt["duration_min"] * mult}, cost_per_km)
+        st.caption(f"ระยะทางเที่ยวเดียว {rt['distance_km']:.2f} กม. × {mult} เที่ยว "
+                   "(ไป-กลับนับเป็น 2 เที่ยว)")
+        st.link_button("เปิดนำทางใน Google Maps",
+                       gmaps(o2[0], o2[1], d2[0], d2[1], avoid), use_container_width=True)
+        st_folium(make_route_map((o2[0], o2[1]), (d2[0], d2[1]), o2[2], d2[2], rt["geometry"]),
+                  use_container_width=True, height=520, key="quick_map", returned_objects=[])
 
 # =========================================================
 # PAGE 1: upload
@@ -459,7 +542,19 @@ if st.session_state.page == "upload":
                 st.error("ไม่พบข้อมูลแปลงที่ใช้งานได้ในไฟล์ที่เลือก")
     for e in st.session_state.errors:
         st.warning(e)
+        st.divider()
+    if st.button("คำนวณระยะทางและค่าเดินทางทั่วไป (ไม่ต้องใช้ไฟล์ KMZ)",
+                 use_container_width=True, key="goto_quick"):
+        st.session_state.page = "quick"
+        st.rerun()
 
+    elif st.session_state.page == "quick":
+        header(0)
+        st.subheader("คำนวณระยะทางและค่าเดินทางทั่วไป")
+        quick_calc()
+    if st.button("ย้อนกลับ", use_container_width=True, key="q_back"):
+        st.session_state.page = "workspace" if st.session_state.df is not None else "upload"
+        st.rerun()
 # =========================================================
 # PAGE 2: classify villages
 # =========================================================
@@ -505,9 +600,9 @@ else:
     m2.metric("จำนวนหมู่บ้าน", f"{df['Village'].nunique():,} หมู่บ้าน")
     m3.metric("จำนวนไฟล์", f"{df['ไฟล์'].nunique():,} ไฟล์")
 
-    t_over, t_origin, t_office, t_pair, t_map, t_vil = st.tabs([
+    t_over, t_origin, t_office, t_pair, t_map, t_vil, t_quick = st.tabs([
         "ตารางข้อมูล", "เลือกจุดเริ่มต้น", "สำนักงานไปยังแปลง", "ระหว่างแปลง",
-        "แผนที่นำทาง", "จัดการหมู่บ้าน",
+        "แผนที่นำทาง", "จัดการหมู่บ้าน", "คำนวณทั่วไป",
     ])
 
     # ---- Table with village filter + Google Maps link per plot
@@ -678,5 +773,6 @@ else:
             st.session_state.route_map = st.session_state.route_summary = None
             st.success("อัปเดตการจำแนกหมู่บ้านแล้ว (ต้องคำนวณระยะทางทั้งหมดใหม่)")
             st.rerun()
-
+    with t_quick:
+        quick_calc()
     st.caption("หมายเหตุ: ระยะทางและเวลาเป็นค่าประมาณจาก OSRM ค่าน้ำมันคำนวณจากค่าที่ตั้งไว้ในแถบด้านซ้าย")
