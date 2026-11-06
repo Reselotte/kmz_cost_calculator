@@ -173,59 +173,53 @@ html body .stApp.stApp [class*="st-key-del"] button *{color:#FFFFFF !important;
 html body .stApp [data-testid="stDataFrame"],html body .stApp [data-testid="stDataEditor"]{
       border:1px solid var(--line);border-radius:10px;overflow:hidden;}
 
-/* ================= Animation & Hover ================= */
-@keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+/* ================= Animation & Hover (เคลื่อนไหวช้า นุ่ม) ================= */
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
 @keyframes heroflow{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}
-@keyframes pulseRing{0%,100%{box-shadow:0 0 0 0 transparent;}50%{box-shadow:0 0 0 5px var(--soft);}}
-
-/* เปลี่ยนสีธีมแบบนุ่มนวล */
-html body .stApp,html body [data-testid="stAppViewContainer"],html body [data-testid="stMain"],
-html body [data-testid="stHeader"],html body [data-testid="stSidebar"],html body [data-testid="stSidebar"]>div,
-html body .stApp [data-testid="stVerticalBlockBorderWrapper"],html body .stApp [data-testid="stExpander"],
-html body .stApp [data-testid="stAlert"],html body .stApp [data-baseweb="input"],
-html body .stApp [data-baseweb="base-input"],html body .stApp [data-baseweb="select"]>div,
-html body .stApp .step,html body .stApp div[data-testid="stMetric"]{
-      transition:background-color .5s ease,border-color .5s ease,color .5s ease,
-                 box-shadow .25s ease,transform .25s ease;}
-html body .stApp [data-testid="stMarkdownContainer"] *,html body .stApp [data-testid="stWidgetLabel"] *,
-html body .stApp [data-testid="stCaptionContainer"] *{transition:color .5s ease;}
+@keyframes pulseRing{0%,100%{box-shadow:0 0 0 0 transparent;}50%{box-shadow:0 0 0 6px var(--soft);}}
 
 /* Hero: ไล่เฉดสีขยับช้า ๆ */
 html body .stApp .hero{background:linear-gradient(120deg,var(--h1),var(--h2),var(--h1)) !important;
-      background-size:220% 220%;animation:heroflow 14s ease infinite,fadeUp .5s ease both;
+      background-size:220% 220%;animation:heroflow 18s ease infinite,fadeUp .9s ease both;
       box-shadow:0 8px 24px rgba(0,0,0,.18);}
 
 /* องค์ประกอบที่โผล่ใหม่ค่อย ๆ เลื่อนขึ้น */
 html body .stApp div[data-testid="stMetric"],html body .stApp [data-testid="stAlert"],
-html body .stApp .steps{animation:fadeUp .45s ease both;}
+html body .stApp .steps{animation:fadeUp .9s ease both;}
 
 /* ขั้นตอน */
-html body .stApp .step:hover{transform:translateY(-3px);border-color:var(--pri);
-      box-shadow:0 6px 16px rgba(0,0,0,.18);}
-html body .stApp .step.on{animation:pulseRing 2.6s ease-in-out infinite;}
+html body .stApp .step{transition:transform .7s cubic-bezier(.22,.61,.36,1),border-color .7s ease,box-shadow .7s ease;}
+html body .stApp .step:hover{transform:translateY(-2px);border-color:var(--pri);
+      box-shadow:0 6px 16px rgba(0,0,0,.16);}
+html body .stApp .step.on{animation:pulseRing 3.4s ease-in-out infinite;}
 
 /* การ์ดตัวเลข */
-html body .stApp div[data-testid="stMetric"]:hover{transform:translateY(-4px);
+html body .stApp div[data-testid="stMetric"]{
+      transition:transform .8s cubic-bezier(.22,.61,.36,1),box-shadow .8s ease,border-color .8s ease;}
+html body .stApp div[data-testid="stMetric"]:hover{transform:translateY(-3px);
       border-color:var(--pri);border-left-color:var(--gold);
-      box-shadow:0 10px 24px rgba(0,0,0,.22),0 0 0 1px var(--pri);}
+      box-shadow:0 10px 24px rgba(0,0,0,.2),0 0 0 1px var(--pri);}
 
 /* ปุ่มทั้งหมด */
 html body .stApp div.stButton>button,html body .stApp [data-testid="stDownloadButton"] button,
 html body .stApp [data-testid="stLinkButton"] a{
-      transition:background-color .3s ease,border-color .3s ease,box-shadow .25s ease,
-                 transform .2s ease,filter .2s ease;}
+      transition:background-color .6s ease,border-color .6s ease,box-shadow .6s ease,
+                 transform .6s cubic-bezier(.22,.61,.36,1),filter .6s ease;}
 html body .stApp div.stButton>button:hover,html body .stApp [data-testid="stDownloadButton"] button:hover,
 html body .stApp [data-testid="stLinkButton"] a:hover{transform:translateY(-2px);
       background:var(--soft) !important;border-color:var(--head) !important;
-      box-shadow:0 8px 18px rgba(0,0,0,.25);}
+      box-shadow:0 8px 18px rgba(0,0,0,.22);}
 html body .stApp div.stButton>button[kind="primary"]:hover,
 html body .stApp div.stButton>button[data-testid="stBaseButton-primary"]:hover{
-      background:var(--btn) !important;filter:brightness(1.15);
-      box-shadow:0 8px 20px rgba(0,0,0,.3),0 0 14px var(--pri);}
+      background:var(--btn) !important;filter:brightness(1.12);
+      box-shadow:0 8px 20px rgba(0,0,0,.28),0 0 14px var(--pri);}
 html body .stApp div.stButton>button:active,html body .stApp [data-testid="stDownloadButton"] button:active,
-html body .stApp [data-testid="stLinkButton"] a:active{transform:translateY(0) scale(.97);box-shadow:none;}
+html body .stApp [data-testid="stLinkButton"] a:active{transform:translateY(0) scale(.98);box-shadow:none;
+      transition-duration:.15s;}
 
 /* ช่องกรอก */
+html body .stApp [data-baseweb="input"],html body .stApp [data-baseweb="base-input"],
+html body .stApp [data-baseweb="select"]>div{transition:border-color .7s ease,box-shadow .7s ease;}
 html body .stApp [data-baseweb="input"]:hover,html body .stApp [data-baseweb="select"]>div:hover{
       border-color:var(--pri) !important;}
 html body .stApp [data-baseweb="input"]:focus-within,html body .stApp [data-baseweb="base-input"]:focus-within,
@@ -233,27 +227,33 @@ html body .stApp [data-baseweb="select"]>div:focus-within{border-color:var(--pri
       box-shadow:0 0 0 3px var(--soft),0 0 14px var(--pri);}
 
 /* แท็บ / ตัวเลือก / expander / ตาราง */
-html body .stApp button[data-baseweb="tab"]{transition:background-color .25s ease,transform .2s ease;
+html body .stApp button[data-baseweb="tab"]{transition:background-color .7s ease,transform .7s cubic-bezier(.22,.61,.36,1);
       border-radius:10px 10px 0 0;}
-html body .stApp button[data-baseweb="tab"]:hover{background:var(--soft) !important;transform:translateY(-2px);}
+html body .stApp button[data-baseweb="tab"]:hover{background:var(--soft) !important;transform:translateY(-1px);}
 html body .stApp [data-testid="stRadio"] label,html body .stApp [data-testid="stCheckbox"] label{
-      transition:transform .2s ease;}
+      transition:transform .6s cubic-bezier(.22,.61,.36,1);}
 html body .stApp [data-testid="stRadio"] label:hover,html body .stApp [data-testid="stCheckbox"] label:hover{
-      transform:translateX(3px);}
+      transform:translateX(2px);}
+html body .stApp [data-testid="stExpander"],html body .stApp [data-testid="stVerticalBlockBorderWrapper"],
+html body .stApp [data-testid="stDataFrame"],html body .stApp [data-testid="stDataEditor"]{
+      transition:border-color .8s ease,box-shadow .8s ease;}
 html body .stApp [data-testid="stExpander"]:hover{border-color:var(--pri) !important;
-      box-shadow:0 4px 14px rgba(0,0,0,.15);}
+      box-shadow:0 4px 14px rgba(0,0,0,.14);}
 html body .stApp [data-testid="stVerticalBlockBorderWrapper"]:hover{border-color:var(--pri);}
 html body .stApp [data-testid="stDataFrame"]:hover,html body .stApp [data-testid="stDataEditor"]:hover{
-      border-color:var(--pri);box-shadow:0 6px 18px rgba(0,0,0,.18);}
+      border-color:var(--pri);box-shadow:0 6px 18px rgba(0,0,0,.16);}
 
 /* ลดแอนิเมชันสำหรับคนที่ปิดเอฟเฟกต์ในระบบ */
 @media (prefers-reduced-motion:reduce){
-  html body .stApp *,html body .stApp *::before,html body .stApp *::after{
+  html body .stApp *,html body .stApp *::before,html body .stApp *::after,html body :root{
       animation:none !important;transition:none !important;}}
 """
 
-vars_css = ":root{" + "".join(f"--{k}:{v};" for k, v in P.items()) + \
-           f"color-scheme:{'dark' if IS_DARK else 'light'};}}"
+# ลงทะเบียนตัวแปรสีเป็นชนิด <color> เพื่อให้ "ไล่สี" (fade) ได้ทั้งหน้าพร้อมกัน
+_props = "".join(f"@property --{k}{{syntax:'<color>';inherits:true;initial-value:{v};}}" for k, v in P.items())
+_fade = ",".join(f"--{k} 1.2s ease-in-out" for k in P)
+vars_css = _props + ":root{" + "".join(f"--{k}:{v};" for k, v in P.items()) + \
+           f"color-scheme:{'dark' if IS_DARK else 'light'};transition:{_fade};}}"
 st.markdown(f"<style>{vars_css}{STATIC_CSS}</style>", unsafe_allow_html=True)
 
 OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
