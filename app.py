@@ -23,19 +23,49 @@ st.set_page_config(page_title="ระบบจัดการแปลงยา�
 # ---------------------------------------------------------
 # Theme (สว่าง / มืด) : ตามเมนู Settings ของ Streamlit
 # ---------------------------------------------------------
-LIGHT = dict(bg="#F7F3EA", card="#FFFFFF", txt="#23302A", mut="#4A5A50", line="#DDD3BE",
-             pri="#2E6B4F", head="#1F4D38", soft="#E9F1EA", side="#EFE8D8",
-             inp="#FFFFFF", inpb="#B9AE96", gold="#C98A2B", btn="#2E6B4F")
-DARK = dict(bg="#111A15", card="#1B2922", txt="#EDF3EA", mut="#B4C3B9", line="#3B4D43",
-            pri="#4FA77B", head="#9BE0BC", soft="#24372D", side="#0C130F",
-            inp="#16221C", inpb="#5B7266", gold="#E2A93F", btn="#3C8A64")
+# แต่ละธีมมีชุดสีเต็ม (พื้นหลัง/การ์ด/ตัวอักษร/ปุ่ม) ทั้งโหมดสว่างและมืด
+THEMES = {
+    "เขียว": dict(
+        light=dict(bg="#F7F3EA", card="#FFFFFF", txt="#23302A", mut="#4A5A50", line="#DDD3BE",
+                   pri="#2E6B4F", head="#1F4D38", soft="#E9F1EA", side="#EFE8D8",
+                   inp="#FFFFFF", inpb="#B9AE96", gold="#C98A2B", btn="#2E6B4F", h1="#12382A", h2="#2E6B4F"),
+        dark=dict(bg="#111A15", card="#1B2922", txt="#EDF3EA", mut="#B4C3B9", line="#3B4D43",
+                  pri="#4FA77B", head="#9BE0BC", soft="#24372D", side="#0C130F",
+                  inp="#16221C", inpb="#5B7266", gold="#E2A93F", btn="#3C8A64", h1="#12382A", h2="#2E6B4F")),
+    "น้ำเงิน": dict(
+        light=dict(bg="#EEF3F9", card="#FFFFFF", txt="#1F2A37", mut="#4A5A6E", line="#CBD8E8",
+                   pri="#2563A8", head="#173F6E", soft="#E6EEF8", side="#E1EAF4",
+                   inp="#FFFFFF", inpb="#9DB2CC", gold="#C98A2B", btn="#2563A8", h1="#10294A", h2="#2563A8"),
+        dark=dict(bg="#0F1620", card="#18222F", txt="#E8EFF8", mut="#B0C0D4", line="#34475F",
+                  pri="#5A9BE0", head="#A9CDF5", soft="#1F2F45", side="#0A1018",
+                  inp="#141E2B", inpb="#566C88", gold="#E2A93F", btn="#3C79BF", h1="#10294A", h2="#2563A8")),
+    "ส้ม": dict(
+        light=dict(bg="#FAF3EC", card="#FFFFFF", txt="#33261C", mut="#6B5646", line="#E6D3C0",
+                   pri="#C2571A", head="#7A3410", soft="#FBEBDD", side="#F3E5D6",
+                   inp="#FFFFFF", inpb="#CDB297", gold="#2E6B8F", btn="#C2571A", h1="#6B2E0C", h2="#C2571A"),
+        dark=dict(bg="#1A130E", card="#271C15", txt="#F6ECE4", mut="#CDB9A9", line="#55402F",
+                  pri="#E58A4B", head="#F8C9A3", soft="#3A2A1E", side="#120C08",
+                  inp="#20160F", inpb="#7A5F49", gold="#5FB3E0", btn="#C96F32", h1="#6B2E0C", h2="#C2571A")),
+    "ม่วง": dict(
+        light=dict(bg="#F5F0FA", card="#FFFFFF", txt="#2A2033", mut="#5E4E70", line="#DACBE8",
+                   pri="#7A3FA8", head="#4E2670", soft="#F0E7F8", side="#ECE2F5",
+                   inp="#FFFFFF", inpb="#B7A3CC", gold="#C98A2B", btn="#7A3FA8", h1="#3B1D56", h2="#7A3FA8"),
+        dark=dict(bg="#15101C", card="#211A2B", txt="#F1EBF8", mut="#C3B5D4", line="#46385A",
+                  pri="#A878D6", head="#D8BEF2", soft="#2E2438", side="#0E0A14",
+                  inp="#1A1423", inpb="#6B5A82", gold="#E2A93F", btn="#8E5BBF", h1="#3B1D56", h2="#7A3FA8")),
+}
 
-# ต้องใช้ Streamlit >= 1.46
-try:
-    IS_DARK = st.context.theme.type == "dark"
-except Exception:
-    IS_DARK = False
-P = DARK if IS_DARK else LIGHT
+# โหมดสว่าง/มืดเลือกได้ที่แถบด้านซ้าย (ค่าถูกเก็บใน session_state ตั้งแต่รอบก่อน)
+_mode = st.session_state.get("theme_mode", "มืด")
+if _mode == "ตามระบบ":
+    # ต้องใช้ Streamlit >= 1.46
+    try:
+        IS_DARK = st.context.theme.type == "dark"
+    except Exception:
+        IS_DARK = False
+else:
+    IS_DARK = _mode == "มืด"
+P = THEMES.get(st.session_state.get("theme_accent", "เขียว"), THEMES["เขียว"])["dark" if IS_DARK else "light"]
 
 STATIC_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap');
@@ -66,7 +96,7 @@ html body .stApp [data-testid="stCaptionContainer"] *,html body .stApp .note{
 .note{margin:-.3rem 0 1rem 0;}
 
 /* Hero (ใช้ div ไม่ใช่ h1 เพื่อไม่ให้ถูกสีหัวข้อทับ) */
-.hero{background:linear-gradient(120deg,#12382A,#2E6B4F);border-radius:18px;
+.hero{background:linear-gradient(120deg,var(--h1),var(--h2));border-radius:18px;
       padding:1.6rem 1.8rem;margin-bottom:1.2rem;}
 html body .stApp .hero .hero-title{color:#FFFFFF !important;-webkit-text-fill-color:#FFFFFF !important;
       font-size:2rem;font-weight:700;margin:0 0 .3rem 0;line-height:1.3;}
@@ -125,12 +155,21 @@ html body .stApp [data-testid="stFileUploaderDropzone"] button{background:var(--
 html body .stApp [data-testid="stExpander"],html body .stApp [data-testid="stExpander"] details{
       background:var(--card) !important;border:1px solid var(--line) !important;}
 html body .stApp [data-testid="stVerticalBlockBorderWrapper"]{background:var(--card);border-radius:14px;}
+html body .stApp [data-testid="stAlert"],html body .stApp [data-testid="stAlertContainer"]{
+      background:var(--soft) !important;border:1px solid var(--pri) !important;border-radius:12px;}
 html body .stApp [data-testid="stAlert"] *{color:var(--txt) !important;-webkit-text-fill-color:var(--txt) !important;}
-/* ปุ่ม ✕ สีแดงลบสถานะ */
-html body .stApp div[class*="st-key-del"] div.stButton>button{min-height:2.1rem;padding:0 .5rem;
-      background:#D32F2F !important;border:2px solid #D32F2F !important;border-radius:8px;}
-html body .stApp div[class*="st-key-del"] div.stButton>button *{color:#FFFFFF !important;
-      -webkit-text-fill-color:#FFFFFF !important;font-weight:700;}
+html body .stApp [data-testid="stToast"],html body .stApp [data-testid="stToast"] *{
+      background:var(--card) !important;color:var(--txt) !important;-webkit-text-fill-color:var(--txt) !important;}
+/* ปุ่ม ✕ สีแดงเรืองแสง */
+html body .stApp.stApp [class*="st-key-del"] button{min-height:2.1rem;padding:0 .6rem;
+      background:#FF1744 !important;background-color:#FF1744 !important;border:2px solid #FF8A9B !important;
+      border-radius:8px;
+      box-shadow:0 0 6px #FF1744,0 0 14px rgba(255,23,68,.75),0 0 28px rgba(255,23,68,.45) !important;
+      transition:box-shadow .15s,transform .15s;}
+html body .stApp.stApp [class*="st-key-del"] button:hover{
+      box-shadow:0 0 10px #FF1744,0 0 24px #FF1744,0 0 42px rgba(255,23,68,.8) !important;transform:scale(1.08);}
+html body .stApp.stApp [class*="st-key-del"] button *{color:#FFFFFF !important;
+      -webkit-text-fill-color:#FFFFFF !important;font-weight:700;text-shadow:0 0 6px #FFFFFF;}
 html body .stApp [data-testid="stDataFrame"],html body .stApp [data-testid="stDataEditor"]{
       border:1px solid var(--line);border-radius:10px;overflow:hidden;}
 """
@@ -575,6 +614,10 @@ def apply_geo_choice():
 
 with st.sidebar:
     st.header("ตั้งค่าระบบ")
+    st.subheader("สีของหน้าเว็บ")
+    st.radio("โหมด", ["มืด", "สว่าง", "ตามระบบ"], key="theme_mode", horizontal=True)
+    st.radio("โทนสี", list(THEMES), key="theme_accent", horizontal=True)
+    st.divider()
     st.subheader("จุดเริ่มต้นการเดินทาง")
     st.text_input("ชื่อจุดเริ่มต้น", key="office_name")
     st.number_input("ละติจูด", key="office_lat", format="%.6f", step=0.0001)
