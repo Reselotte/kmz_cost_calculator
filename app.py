@@ -18,7 +18,197 @@ import requests
 import streamlit as st
 from streamlit_folium import st_folium
 
-st.set_page_config(page_title="ระบบจัดการแปลงยาสูบ", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Tobacco Plot Management | ระบบจัดการแปลงยาสูบ", layout="wide", initial_sidebar_state="expanded")
+
+# ---------------------------------------------------------
+# ภาษา / Language (ไทย | English)
+# ---------------------------------------------------------
+LANG = "EN" if st.session_state.get("lang_choice") == "English" else "TH"
+LANGCODE = "en" if LANG == "EN" else "th"
+
+EN = {
+# ---- theme / mode / misc ----
+"เขียว": "Green", "น้ำเงิน": "Blue", "ส้ม": "Orange", "ม่วง": "Purple",
+"มืด": "Dark", "สว่าง": "Light", "ตามระบบ": "System",
+"สำนักงาน": "Office", "จุดเริ่มต้น": "Starting point",
+"ระบบจัดการแปลงยาสูบ": "Tobacco Plot Management System",
+'<div class="hero"><div class="hero-title">ระบบจัดการแปลงยาสูบ</div><p class="hero-sub">จัดการข้อมูลแปลง ตรวจสอบพิกัด และประเมินระยะทางกับค่าน้ำมันในการเดินทาง</p></div>':
+    '<div class="hero"><div class="hero-title">Tobacco Plot Management System</div><p class="hero-sub">Manage plot data, check coordinates, and estimate travel distance and fuel cost</p></div>',
+"1. นำเข้าไฟล์ KMZ": "1. Import KMZ files",
+"2. จำแนกหมู่บ้าน": "2. Classify villages",
+"3. วิเคราะห์ข้อมูล": "3. Analyze data",
+# ---- tracking / generic words ----
+"เสร็จแล้ว": "Done", "ยังไม่เสร็จ": "Not done", "วันที่เสร็จ": "Date done", "หมายเหตุ": "Note",
+"ความคืบหน้า": "Progress", "คงเหลือ": "Remaining", "% เสร็จ": "% done", "สถานะ": "Status",
+"ทั้งหมด": "All", "แสดง": "Show", "ลบ": "Delete",
+"หมู่บ้าน": "Village", "เลขแปลง": "Plot no.", "ไฟล์": "File", "จำนวนแปลง": "Plots",
+"จำนวนแปลงทั้งหมด": "Total plots", "จำนวนหมู่บ้าน": "Villages", "จำนวนไฟล์": "Files",
+"สรุปรายหมู่บ้าน": "Village summary", "รายงานรายแปลง": "Plot report",
+"ไฟล์ KMZ": "KMZ file", "ชื่อหมู่บ้าน": "Village name", "รหัส Group": "Group code",
+"ต้นทาง": "Origin", "ปลายทาง": "Destination", "เป้าหมาย": "Target", "ที่ต้องการไป": "to visit",
+# ---- route / money ----
+"ระยะทางขับขี่": "Driving distance", "เวลาโดยประมาณ": "Estimated time",
+"ค่าน้ำมันโดยประมาณ": "Estimated fuel cost", "รวมค่าทางด่วน": "Total incl. tolls",
+"ไม่พบเส้นทางขับขี่ระหว่างพิกัดที่เลือก": "No driving route found between the selected points",
+"เซิร์ฟเวอร์เส้นทางไม่รองรับการเลี่ยงทางด่วน ระบบแสดงเส้นทางปกติ (ปุ่ม Google Maps ยังเลี่ยงทางด่วนให้ตามที่เลือก)":
+    "The routing server does not support avoiding tolls, so the normal route is shown (the Google Maps button still avoids tolls as selected)",
+"ไม่พบทางด่วนในเส้นทางนี้ (ค่าทางด่วน 0 บาท)": "No toll roads on this route (toll cost 0 THB)",
+"ทางด่วนที่ผ่าน": "Toll roads passed", "ค่าผ่านทาง (บาท)": "Toll fee (THB)",
+"**พบทางด่วนในเส้นทางนี้**": "**Toll roads found on this route**",
+"บันทึกค่าผ่านทางนี้ไว้ใช้ครั้งต่อไป": "Save this toll fee for next time",
+"บันทึกค่าผ่านทางแล้ว": "Toll fee saved",
+"ทางด่วน (ไม่ทราบชื่อ)": "Toll road (unnamed)",
+"หลีกเลี่ยงทางด่วน": "Avoid tolls",
+# ---- sidebar ----
+"ตั้งค่าระบบ": "Settings", "สีของหน้าเว็บ": "Page colors", "โหมด": "Mode", "โทนสี": "Color tone",
+"จุดเริ่มต้นการเดินทาง": "Trip starting point", "ชื่อจุดเริ่มต้น": "Starting point name",
+"ละติจูด": "Latitude", "ลองจิจูด": "Longitude",
+"หรือวางพิกัดจาก Google Maps": "Or paste coordinates from Google Maps",
+"ใช้พิกัดที่วาง": "Use pasted coordinates",
+"เปิดจุดเริ่มต้นใน Google Maps": "Open starting point in Google Maps",
+'เลือกจากแผนที่ได้ที่แท็บ "เลือกจุดเริ่มต้น"': 'You can also pick it on the map in the "Pick starting point" tab',
+"ค่าน้ำมัน": "Fuel cost", "ราคาน้ำมัน (บาท/ลิตร)": "Fuel price (THB/liter)",
+"อัตราสิ้นเปลือง (กม./ลิตร)": "Fuel efficiency (km/liter)", "ค่าน้ำมันต่อกิโลเมตร": "Fuel cost per km",
+"บันทึกพิกัดใหม่แล้ว": "New coordinates saved",
+"รูปแบบไม่ถูกต้อง ตัวอย่าง: 13.685963, 100.621783": "Invalid format. Example: 13.685963, 100.621783",
+"รูปแบบพิกัดไม่ถูกต้อง ตัวอย่าง: 13.685963, 100.621783": "Invalid coordinate format. Example: 13.685963, 100.621783",
+"ตั้งเป็นจุดเริ่มต้นแล้ว (อย่าลืมกดคำนวณระยะทางใหม่)": "Set as the starting point (remember to recalculate distances)",
+# ---- point input / quick calc ----
+"ค้นหาชื่อสถานที่": "Search by place name", "วางพิกัดจาก Google Maps": "Paste coordinates from Google Maps",
+"ใช้จุดเริ่มต้นในแถบด้านซ้าย": "Use starting point from the sidebar",
+"ชื่อสถานที่": "Place name", "ค้นหา": "Search", "ผลการค้นหา": "Search results", "พิกัด": "Coordinates",
+"เช่น ตลาดศรีเทพ เพชรบูรณ์": "e.g. Sri Thep Market, Phetchabun",
+"ไม่พบสถานที่ที่ค้นหา": "No matching place found",
+"ไป-กลับ": "Round trip", "จำนวนเที่ยว": "Number of trips",
+"คำนวณระยะทางและค่าเดินทาง": "Calculate distance and travel cost",
+"กรุณาระบุทั้งต้นทางและปลายทาง": "Please specify both origin and destination",
+'<div class="note">คำนวณระยะทาง เวลา และค่าน้ำมันระหว่างสองจุดใดก็ได้ ไม่ต้องอัปโหลดไฟล์ KMZ (ราคาน้ำมันและอัตราสิ้นเปลืองตั้งที่แถบด้านซ้าย)</div>':
+    '<div class="note">Calculate distance, time and fuel cost between any two points. No KMZ upload needed (set fuel price and efficiency in the sidebar).</div>',
+"เปิดนำทางใน Google Maps": "Open navigation in Google Maps",
+# ---- upload / classify ----
+"นำเข้าไฟล์ KMZ": "Import KMZ files",
+'<div class="note">เลือกได้หลายไฟล์พร้อมกัน เช่น หนึ่งไฟล์ต่อหนึ่งหมู่บ้าน</div>':
+    '<div class="note">You can choose several files at once, e.g. one file per village</div>',
+"แหล่งข้อมูล": "Data source", "อัปโหลดไฟล์": "Upload files", "โฟลเดอร์ในเครื่อง": "Local folder",
+"เลือกไฟล์ KMZ": "Choose KMZ files", "Path ของโฟลเดอร์": "Folder path",
+"ไม่พบโฟลเดอร์ที่ระบุ": "Folder not found",
+"โหลดไฟล์และไปขั้นตอนถัดไป": "Load files and continue",
+"กรุณาเลือกไฟล์ KMZ อย่างน้อยหนึ่งไฟล์": "Please choose at least one KMZ file",
+"ไม่พบข้อมูลแปลงที่ใช้งานได้ในไฟล์ที่เลือก": "No usable plot data found in the selected files",
+"คำนวณระยะทางและค่าเดินทางทั่วไป (ไม่ต้องใช้ไฟล์ KMZ)": "General distance and travel cost calculator (no KMZ needed)",
+"คำนวณระยะทางและค่าเดินทางทั่วไป": "General distance and travel cost calculator",
+"ย้อนกลับ": "Back", "จำแนกหมู่บ้าน": "Classify villages",
+"ยืนยันและเข้าสู่หน้าวิเคราะห์": "Confirm and go to analysis",
+"กำลังอ่านไฟล์...": "Reading files...",
+'<div class="note">พิมพ์แก้ชื่อหมู่บ้านและรหัส Group ในตารางได้โดยตรง ไฟล์ที่เป็นหมู่บ้านเดียวกันให้ใส่ชื่อเหมือนกัน</div>':
+    '<div class="note">Edit village names and Group codes directly in the table. Files from the same village should use the same name.</div>',
+# ---- workspace ----
+"อัปโหลดไฟล์ใหม่": "Upload new files",
+"ตารางข้อมูล": "Data table", "เลือกจุดเริ่มต้น": "Pick starting point",
+"สำนักงานไปยังแปลง": "Office to plots", "ระหว่างแปลง": "Between plots",
+"แผนที่นำทาง": "Navigation map", "ติดตามงาน": "Progress tracking",
+"จัดการหมู่บ้าน": "Manage villages", "คำนวณทั่วไป": "General calculator",
+"กรองตามหมู่บ้าน": "Filter by village", "ค้นหาเลขแปลง": "Search plot number",
+"เปิดแผนที่": "Open map", "ดาวน์โหลด CSV": "Download CSV",
+"##### สรุปรายหมู่บ้าน": "##### Summary by village",
+"#### เลือกจุดเริ่มต้นจากแผนที่": "#### Pick the starting point on the map",
+'<div class="note">คลิกบนแผนที่เพื่อปักหมุด หรือค้นหาชื่อสถานที่ แล้วกด "ใช้จุดนี้เป็นจุดเริ่มต้น" (สลับดาวเทียมได้ที่มุมขวาบนของแผนที่)</div>':
+    '<div class="note">Click on the map to drop a pin, or search for a place, then press "Use this point as the starting point" (switch to satellite at the top right of the map)</div>',
+"ค้นหาสถานที่": "Search for a place",
+"ตั้งชื่อจุดเริ่มต้น (ไม่บังคับ)": "Name the starting point (optional)",
+"ใช้จุดนี้เป็นจุดเริ่มต้น": "Use this point as the starting point",
+"เปิดใน Google Maps": "Open in Google Maps",
+"ยังไม่ได้เลือกจุด คลิกบนแผนที่หรือค้นหาสถานที่ได้เลย": "No point selected yet. Click on the map or search for a place.",
+"จุดที่เลือก": "Selected point",
+"Google แผนที่ถนน": "Google Road map", "Google ดาวเทียม": "Google Satellite",
+"คำนวณระยะทางทั้งหมด": "Calculate all distances", "กำลังคำนวณ...": "Calculating...",
+"จุดเริ่มต้นถูกเปลี่ยนหลังคำนวณ กรุณากดคำนวณใหม่": "The starting point changed after calculation. Please recalculate.",
+"แปลงที่คำนวณได้": "Plots calculated", "ระยะทางเฉลี่ย": "Average distance",
+"ค่าน้ำมันเฉลี่ย": "Average fuel cost", "ยังไม่มีผลการคำนวณ": "No results yet",
+"##### เลือกเส้นทางไปยังแปลงใน Google Maps": "##### Choose a route to a plot in Google Maps",
+"เปิดเส้นทางใน Google Maps": "Open route in Google Maps",
+"#### ระยะทางระหว่างแปลง (ในหมู่บ้านเดียวกันหรือข้ามหมู่บ้าน)": "#### Distance between plots (same village or across villages)",
+"คำนวณระยะทาง": "Calculate distance", "ค้นหาเส้นทางและแสดงแผนที่": "Find route and show map",
+"##### ทำเครื่องหมายแปลงที่ไปเสร็จแล้ว": "##### Mark plots that have been visited",
+"บันทึกสถานะ": "Save status", "บันทึกสถานะแล้ว": "Status saved",
+"ยกเลิกสถานะเสร็จของแปลงนี้": "Unmark this plot as done",
+"ยังไม่มีแปลงที่ทำเครื่องหมายว่าเสร็จ": "No plots marked as done yet",
+"##### รายงาน": "##### Report",
+"ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (Excel)": "Download village summary report (Excel)",
+"ดาวน์โหลดรายงานรายแปลง (Excel)": "Download plot report (Excel)",
+"ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (CSV)": "Download village summary report (CSV)",
+"ดาวน์โหลดรายงานรายแปลง (CSV)": "Download plot report (CSV)",
+"ยังไม่ได้ติดตั้ง openpyxl จึงดาวน์โหลดเป็น CSV แทน (ติดตั้งด้วย pip install openpyxl)":
+    "openpyxl is not installed, so downloads are CSV instead (install it with pip install openpyxl)",
+"#### แก้ไขการจำแนกหมู่บ้าน": "#### Edit village classification",
+"บันทึกและอัปเดตข้อมูล": "Save and update data",
+"อัปเดตการจำแนกหมู่บ้านแล้ว (ต้องคำนวณระยะทางทั้งหมดใหม่)": "Village classification updated (recalculate all distances)",
+"หมายเหตุ: ระยะทางและเวลาเป็นค่าประมาณจาก OSRM ค่าน้ำมันคำนวณจากค่าที่ตั้งไว้ในแถบด้านซ้าย":
+    "Note: distance and time are estimates from OSRM; fuel cost is calculated from the values set in the sidebar",
+# ---- templates (f-strings) ----
+"{0:.2f} กม.": "{0:.2f} km", "{0:.0f} นาที": "{0:.0f} min",
+"{0:,.2f} บาท": "{0:,.2f} THB", "{0:.2f} บาท": "{0:.2f} THB",
+"หมู่บ้าน{0}": "Village ({0})", "เลขแปลง{0}": "Plot no. ({0})", "{0} แปลง {1}": "{0} plot {1}",
+"ค่าน้ำมัน {0:,.2f} + ค่าทางด่วน {1:,.2f} บาท": "Fuel {0:,.2f} + tolls {1:,.2f} THB",
+"มี {0} ช่วงที่ยังไม่ได้ใส่ค่าผ่านทาง กรอกครั้งเดียวแล้วกดบันทึก ครั้งต่อไปที่ผ่านทางเดิม (เข้า-ออกเดิม) ระบบจะใส่ให้อัตโนมัติ":
+    "{0} segment(s) have no toll fee yet. Enter it once and press save; next time you pass the same road (same entry and exit) it will be filled in automatically.",
+"จาก {0} ไปยัง {1}": "From {0} to {1}",
+"ระยะทางเที่ยวเดียว {0:.2f} กม. × {1} เที่ยว (ไป-กลับนับเป็น 2 เที่ยว)":
+    "One-way distance {0:.2f} km × {1} trips (round trip counts as 2 trips)",
+"อ่านแล้ว {0}/{1} ไฟล์": "Read {0}/{1} files",
+"{0} ({1:.1f} กม.)": "{0} ({1:.1f} km)",
+"อ่านไฟล์สำเร็จ {0} ไฟล์": "Read {0} files successfully",
+"จุดเริ่มต้นปัจจุบัน: {0} ({1:.6f}, {2:.6f}) แก้ไขได้ที่แถบด้านซ้าย":
+    "Current starting point: {0} ({1:.6f}, {2:.6f}). Edit it in the sidebar.",
+"{0:,} แปลง": "{0:,} plots", "{0:,} หมู่บ้าน": "{0:,} villages", "{0:,} ไฟล์": "{0:,} files",
+"พบไฟล์ KMZ {0} ไฟล์": "Found {0} KMZ files",
+"#### ระยะทางจาก{0}ไปยังทุกแปลง": "#### Distance from {0} to every plot",
+"เปิดเส้นทางจาก{0}ไป {1} ใน Google Maps": "Open route from {0} to {1} in Google Maps",
+"#### เส้นทางจาก{0}ไปยังแปลงเป้าหมาย": "#### Route from {0} to the target plot",
+"##### แปลงที่เสร็จแล้ว ({0:,} แปลง)": "##### Completed plots ({0:,})",
+"ณ วันที่ {0} เสร็จแล้ว {1:,} จาก {2:,} แปลง ({3} จาก {4} หมู่บ้านเสร็จครบ)":
+    "As of {0}: {1:,} of {2:,} plots done ({3} of {4} villages fully done)",
+"ค้นหาไม่สำเร็จ: {0}": "Search failed: {0}",
+"ไม่สามารถคำนวณเส้นทางได้: {0}": "Could not calculate the route: {0}",
+"ข้อผิดพลาดขณะอ่านไฟล์ ({0})": "Errors while reading files ({0})",
+"**จุดที่เลือก:** {0:.6f}, {1:.6f}": "**Selected point:** {0:.6f}, {1:.6f}",
+"ใช้เวลา {0:.1f} วินาที": "Took {0:.1f} seconds",
+"{0}: ระยะทางขับขี่ประมาณ {1:.2f} กม. ค่าน้ำมันประมาณ {2:.2f} บาท":
+    "{0}: driving distance about {1:.2f} km, fuel cost about {2:.2f} THB",
+"{0}: ไม่พบไฟล์ KML ภายใน KMZ": "{0}: no KML file found inside the KMZ",
+"คำนวณไม่ได้ {0} แปลง (อาจอยู่ไกลถนน หรือเซิร์ฟเวอร์ตอบช้า) กดคำนวณใหม่ได้":
+    "{0} plots could not be calculated (they may be far from a road, or the server was slow). You can recalculate.",
+"จุดเริ่มต้นปัจจุบัน: {0}": "Current starting point: {0}",
+"คำนวณแล้ว {0:,}/{1:,} แปลง": "Calculated {0:,}/{1:,} plots",
+"ไม่สามารถสร้างเส้นทางได้: {0}": "Could not create the route: {0}",
+"ยกเลิกสถานะ {0} แปลง {1} แล้ว": "Unmarked {0} plot {1}",
+}
+
+
+def tr(s):
+    """แปลข้อความ UI (ไทย -> อังกฤษ) ถ้าไม่มีคำแปลจะคืนข้อความเดิม"""
+    return EN.get(s, s) if (LANG == "EN" and isinstance(s, str)) else s
+
+
+def trx(x):
+    """แปลค่าที่ใช้แสดงผล (ตัวเลือก/ค่าที่แทรกในประโยค) เฉพาะที่ตรงทั้งข้อความ"""
+    return tr(str(x) if isinstance(x, BaseException) else x)
+
+
+def dfx(d, vals_col=None):
+    """แปลหัวตาราง (และค่าในคอลัมน์สถานะ) ก่อนแสดง/ส่งออก"""
+    if LANG != "EN":
+        return d
+    try:
+        if hasattr(d, "relabel_index"):  # pandas Styler
+            return d.relabel_index([tr(c) for c in d.data.columns], axis=1)
+        d = d.copy()
+        if vals_col and vals_col in d.columns:
+            d[vals_col] = d[vals_col].map(trx)
+        return d.rename(columns=lambda c: tr(c))
+    except Exception:
+        return d
+
 
 # ---------------------------------------------------------
 # Theme (สว่าง / มืด) : ตามเมนู Settings ของ Streamlit
@@ -312,18 +502,21 @@ def to_xlsx(sheets, green_col=None):
     from openpyxl.styles import Font, PatternFill
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+        gc = tr(green_col) if green_col else None
         for name, d in sheets.items():
+            name = tr(name)[:31]
+            d = dfx(d, green_col)
             d.to_excel(xw, sheet_name=name, index=False)
             ws = xw.sheets[name]
             ws.freeze_panes = "A2"
             for i, col in enumerate(d.columns, 1):
                 w = max([len(str(col))] + [len(str(v)) for v in d[col].head(500)])
                 ws.column_dimensions[ws.cell(1, i).column_letter].width = min(max(w + 3, 10), 40)
-            if green_col and green_col in d.columns:
-                gi = list(d.columns).index(green_col)
+            if gc and gc in d.columns:
+                gi = list(d.columns).index(gc)
                 fill = PatternFill("solid", fgColor="2E8B57")
                 for row in ws.iter_rows(min_row=2):
-                    if row[gi].value == "เสร็จแล้ว":
+                    if row[gi].value == tr("เสร็จแล้ว"):
                         for cell in row:
                             cell.fill = fill
                             cell.font = Font(color="FFFFFF")
@@ -362,7 +555,7 @@ def read_kmz_file(file_obj, name):
                 kmls = [n for n in kmz.namelist()
                         if n.lower().endswith(".kml") and not n.startswith("__MACOSX/")]
                 if not kmls:
-                    return [], [f"{name}: ไม่พบไฟล์ KML ภายใน KMZ"]
+                    return [], [tr("{0}: ไม่พบไฟล์ KML ภายใน KMZ").format(trx(name))]
                 for i, kml in enumerate(kmls):
                     path = os.path.join(tmp, f"layer_{i}.kml")
                     with open(path, "wb") as f:
@@ -382,13 +575,13 @@ def read_kmz_file(file_obj, name):
 def load_sources(items):
     """items = [(filename, file_object)] -> one source per KMZ file."""
     sources, errors = [], []
-    bar = st.progress(0, text="กำลังอ่านไฟล์...")
+    bar = st.progress(0, text=tr("กำลังอ่านไฟล์..."))
     for i, (name, obj) in enumerate(items):
         gdfs, errs = read_kmz_file(obj, name)
         errors += errs
         if gdfs:
             sources.append({"name": name, "gdfs": gdfs})
-        bar.progress((i + 1) / len(items), text=f"อ่านแล้ว {i + 1}/{len(items)} ไฟล์")
+        bar.progress((i + 1) / len(items), text=tr("อ่านแล้ว {0}/{1} ไฟล์").format(trx(i + 1), trx(len(items))))
     st.session_state.sources = sources
     st.session_state.errors = errors
     st.session_state.meta = pd.DataFrame({
@@ -532,9 +725,9 @@ def office_distances(olon, olat, lons, lats, on_progress=None, chunk=90, workers
 def base_map(center, zoom=12):
     m = folium.Map(location=center, zoom_start=zoom, tiles=None, control_scale=True)
     folium.TileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", attr="Google",
-                     name="Google แผนที่ถนน", max_zoom=20).add_to(m)
+                     name=tr("Google แผนที่ถนน"), max_zoom=20).add_to(m)
     folium.TileLayer("https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google",
-                     name="Google ดาวเทียม", max_zoom=20).add_to(m)
+                     name=tr("Google ดาวเทียม"), max_zoom=20).add_to(m)
     folium.LayerControl(collapsed=False).add_to(m)
     return m
 
@@ -561,10 +754,10 @@ def gmaps_point(lat, lon):
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def geocode(q):
+def geocode(q, lang="th"):
     r = requests.get("https://nominatim.openstreetmap.org/search",
                      params={"q": q, "format": "json", "limit": 6, "countrycodes": "th",
-                             "accept-language": "th"},
+                             "accept-language": lang},
                      headers={"User-Agent": "tobacco-plot-app/1.0"}, timeout=15)
     r.raise_for_status()
     return [(x["display_name"], float(x["lat"]), float(x["lon"])) for x in r.json()]
@@ -577,62 +770,62 @@ def show_route(route, cost_per_km, toll=0.0, show_toll=False):
     fuel = route["distance_km"] * cost_per_km
     show_toll = show_toll or bool(toll)
     cols = st.columns(4 if show_toll else 3)
-    cols[0].metric("ระยะทางขับขี่", f"{route['distance_km']:.2f} กม.")
-    cols[1].metric("เวลาโดยประมาณ", f"{route['duration_min']:.0f} นาที")
-    cols[2].metric("ค่าน้ำมันโดยประมาณ", f"{fuel:,.2f} บาท")
+    cols[0].metric(tr("ระยะทางขับขี่"), tr("{0:.2f} กม.").format(trx(route['distance_km'])))
+    cols[1].metric(tr("เวลาโดยประมาณ"), tr("{0:.0f} นาที").format(trx(route['duration_min'])))
+    cols[2].metric(tr("ค่าน้ำมันโดยประมาณ"), tr("{0:,.2f} บาท").format(trx(fuel)))
     if show_toll:
-        cols[3].metric("รวมค่าทางด่วน", f"{fuel + toll:,.2f} บาท")
-        st.caption(f"ค่าน้ำมัน {fuel:,.2f} + ค่าทางด่วน {toll:,.2f} บาท")
+        cols[3].metric(tr("รวมค่าทางด่วน"), tr("{0:,.2f} บาท").format(trx(fuel + toll)))
+        st.caption(tr("ค่าน้ำมัน {0:,.2f} + ค่าทางด่วน {1:,.2f} บาท").format(trx(fuel), trx(toll)))
 
 
 def toll_panel(rt, key):
     """ตรวจจับทางด่วนที่เส้นทางผ่าน + ดึงค่าผ่านทางที่เคยบันทึกไว้ คืนค่าทางด่วนเที่ยวเดียว (บาท)"""
     if rt.get("avoid_req") and not rt.get("avoid_ok"):
-        st.warning("เซิร์ฟเวอร์เส้นทางไม่รองรับการเลี่ยงทางด่วน ระบบแสดงเส้นทางปกติ "
-                   "(ปุ่ม Google Maps ยังเลี่ยงทางด่วนให้ตามที่เลือก)")
+        st.warning(tr("เซิร์ฟเวอร์เส้นทางไม่รองรับการเลี่ยงทางด่วน ระบบแสดงเส้นทางปกติ "
+                   "(ปุ่ม Google Maps ยังเลี่ยงทางด่วนให้ตามที่เลือก)"))
     segs = rt.get("tolls") or []
     if not segs:
-        st.caption("ไม่พบทางด่วนในเส้นทางนี้ (ค่าทางด่วน 0 บาท)")
+        st.caption(tr("ไม่พบทางด่วนในเส้นทางนี้ (ค่าทางด่วน 0 บาท)"))
         return 0.0
     rates = st.session_state.toll_rates
     table = pd.DataFrame({
-        "ทางด่วนที่ผ่าน": [f"{s['label']} ({s['km']:.1f} กม.)" for s in segs],
+        "ทางด่วนที่ผ่าน": [tr("{0} ({1:.1f} กม.)").format(trx(s['label']), trx(s['km'])) for s in segs],
         "ค่าผ่านทาง (บาท)": [rates.get(s["id"], {}).get("fee") for s in segs],
     })
     sig = zlib.crc32("|".join(s["id"] for s in segs).encode())
-    st.markdown("**พบทางด่วนในเส้นทางนี้**")
+    st.markdown(tr("**พบทางด่วนในเส้นทางนี้**"))
     ed = st.data_editor(
         table, key=f"{key}_toll_{sig}", hide_index=True, use_container_width=True,
         disabled=["ทางด่วนที่ผ่าน"],
-        column_config={"ค่าผ่านทาง (บาท)": st.column_config.NumberColumn(
-            "ค่าผ่านทาง (บาท)", min_value=0.0, step=5.0, format="%.0f")})
+        column_config={"ทางด่วนที่ผ่าน": st.column_config.TextColumn(tr("ทางด่วนที่ผ่าน")),
+                       "ค่าผ่านทาง (บาท)": st.column_config.NumberColumn(
+            tr("ค่าผ่านทาง (บาท)"), min_value=0.0, step=5.0, format="%.0f")})
     fees = [0.0 if pd.isna(v) else float(v) for v in ed["ค่าผ่านทาง (บาท)"]]
     missing = [s for s, v in zip(segs, ed["ค่าผ่านทาง (บาท)"]) if pd.isna(v)]
     if missing:
-        st.info(f"มี {len(missing)} ช่วงที่ยังไม่ได้ใส่ค่าผ่านทาง กรอกครั้งเดียวแล้วกดบันทึก "
-                "ครั้งต่อไปที่ผ่านทางเดิม (เข้า-ออกเดิม) ระบบจะใส่ให้อัตโนมัติ")
-    if st.button("บันทึกค่าผ่านทางนี้ไว้ใช้ครั้งต่อไป", key=f"{key}_toll_save_{sig}"):
+        st.info(tr("มี {0} ช่วงที่ยังไม่ได้ใส่ค่าผ่านทาง กรอกครั้งเดียวแล้วกดบันทึก ครั้งต่อไปที่ผ่านทางเดิม (เข้า-ออกเดิม) ระบบจะใส่ให้อัตโนมัติ").format(trx(len(missing))))
+    if st.button(tr("บันทึกค่าผ่านทางนี้ไว้ใช้ครั้งต่อไป"), key=f"{key}_toll_save_{sig}"):
         for s, v in zip(segs, ed["ค่าผ่านทาง (บาท)"]):
             if not pd.isna(v):
                 rates[s["id"]] = {"label": s["label"], "fee": float(v)}
         save_toll_rates(rates)
-        st.toast("บันทึกค่าผ่านทางแล้ว")
+        st.toast(tr("บันทึกค่าผ่านทางแล้ว"))
     return sum(fees)
 
 
 def plot_picker(df, label, key):
     c1, c2 = st.columns(2)
-    village = c1.selectbox(f"หมู่บ้าน{label}", sorted(df["Village"].unique()), key=f"{key}_v")
+    village = c1.selectbox(tr("หมู่บ้าน{0}").format(trx(label)), sorted(df["Village"].unique()), key=f"{key}_v", format_func=trx)
     attrs = sorted(df.loc[df["Village"] == village, "Attribute"].astype(str).unique())
-    attr = c2.selectbox(f"เลขแปลง{label}", attrs, key=f"{key}_a")
+    attr = c2.selectbox(tr("เลขแปลง{0}").format(trx(label)), attrs, key=f"{key}_a", format_func=trx)
     row = df[(df["Village"] == village) & (df["Attribute"].astype(str) == attr)].iloc[0]
-    return row, f"{village} แปลง {attr}"
+    return row, tr("{0} แปลง {1}").format(trx(village), trx(attr))
 
 
 def header(step):
     st.markdown(
-        '<div class="hero"><div class="hero-title">ระบบจัดการแปลงยาสูบ</div>'
-        '<p class="hero-sub">จัดการข้อมูลแปลง ตรวจสอบพิกัด และประเมินระยะทางกับค่าน้ำมันในการเดินทาง</p></div>',
+        tr('<div class="hero"><div class="hero-title">ระบบจัดการแปลงยาสูบ</div>'
+        '<p class="hero-sub">จัดการข้อมูลแปลง ตรวจสอบพิกัด และประเมินระยะทางกับค่าน้ำมันในการเดินทาง</p></div>'),
         unsafe_allow_html=True,
     )
     if not step:
@@ -641,20 +834,20 @@ def header(step):
     html = '<div class="steps">'
     for i, n in enumerate(names, 1):
         cls = "on" if i == step else ("done" if i < step else "")
-        html += f'<div class="step {cls}">{n}</div>'
+        html += f'<div class="step {cls}">{tr(n)}</div>'
     st.markdown(html + "</div>", unsafe_allow_html=True)
 
 
 def meta_editor(key):
-    st.markdown('<div class="note">พิมพ์แก้ชื่อหมู่บ้านและรหัส Group ในตารางได้โดยตรง '
-                "ไฟล์ที่เป็นหมู่บ้านเดียวกันให้ใส่ชื่อเหมือนกัน</div>", unsafe_allow_html=True)
+    st.markdown(tr('<div class="note">พิมพ์แก้ชื่อหมู่บ้านและรหัส Group ในตารางได้โดยตรง '
+                "ไฟล์ที่เป็นหมู่บ้านเดียวกันให้ใส่ชื่อเหมือนกัน</div>"), unsafe_allow_html=True)
     return st.data_editor(
         st.session_state.meta, key=key, hide_index=True, use_container_width=True,
         disabled=["ไฟล์"],
         column_config={
-            "ไฟล์": st.column_config.TextColumn("ไฟล์ KMZ"),
-            "หมู่บ้าน": st.column_config.TextColumn("ชื่อหมู่บ้าน", required=True),
-            "Group": st.column_config.TextColumn("รหัส Group", required=True),
+            "ไฟล์": st.column_config.TextColumn(tr("ไฟล์ KMZ")),
+            "หมู่บ้าน": st.column_config.TextColumn(tr("ชื่อหมู่บ้าน"), required=True),
+            "Group": st.column_config.TextColumn(tr("รหัส Group"), required=True),
             "Section": st.column_config.TextColumn("Section"),
         },
     )
@@ -667,9 +860,9 @@ def apply_pasted_coord():
     try:
         lat, lon = [float(x) for x in st.session_state.paste_coord.replace(" ", "").split(",")]
         st.session_state.office_lat, st.session_state.office_lon = lat, lon
-        st.session_state.paste_msg = "บันทึกพิกัดใหม่แล้ว"
+        st.session_state.paste_msg = tr("บันทึกพิกัดใหม่แล้ว")
     except Exception:
-        st.session_state.paste_msg = "รูปแบบไม่ถูกต้อง ตัวอย่าง: 13.685963, 100.621783"
+        st.session_state.paste_msg = tr("รูปแบบไม่ถูกต้อง ตัวอย่าง: 13.685963, 100.621783")
 
 
 def apply_pick():
@@ -680,7 +873,7 @@ def apply_pick():
     name = (st.session_state.get("pick_name") or "").strip()
     if name:
         st.session_state.office_name = name
-    st.session_state.pick_msg = "ตั้งเป็นจุดเริ่มต้นแล้ว (อย่าลืมกดคำนวณระยะทางใหม่)"
+    st.session_state.pick_msg = tr("ตั้งเป็นจุดเริ่มต้นแล้ว (อย่าลืมกดคำนวณระยะทางใหม่)")
 
 
 def apply_geo_choice():
@@ -691,32 +884,33 @@ def apply_geo_choice():
 
 
 with st.sidebar:
-    st.header("ตั้งค่าระบบ")
-    st.subheader("สีของหน้าเว็บ")
-    st.radio("โหมด", ["มืด", "สว่าง", "ตามระบบ"], key="theme_mode", horizontal=True)
-    st.radio("โทนสี", list(THEMES), key="theme_accent", horizontal=True)
+    st.radio("ภาษา / Language", ["ไทย", "English"], key="lang_choice", horizontal=True)
+    st.header(tr("ตั้งค่าระบบ"))
+    st.subheader(tr("สีของหน้าเว็บ"))
+    st.radio(tr("โหมด"), ["มืด", "สว่าง", "ตามระบบ"], key="theme_mode", horizontal=True, format_func=trx)
+    st.radio(tr("โทนสี"), list(THEMES), key="theme_accent", horizontal=True, format_func=trx)
     st.divider()
-    st.subheader("จุดเริ่มต้นการเดินทาง")
-    st.text_input("ชื่อจุดเริ่มต้น", key="office_name")
-    st.number_input("ละติจูด", key="office_lat", format="%.6f", step=0.0001)
-    st.number_input("ลองจิจูด", key="office_lon", format="%.6f", step=0.0001)
-    st.text_input("หรือวางพิกัดจาก Google Maps", key="paste_coord", placeholder="13.685963, 100.621783")
-    st.button("ใช้พิกัดที่วาง", on_click=apply_pasted_coord, use_container_width=True)
+    st.subheader(tr("จุดเริ่มต้นการเดินทาง"))
+    st.text_input(tr("ชื่อจุดเริ่มต้น"), key="office_name")
+    st.number_input(tr("ละติจูด"), key="office_lat", format="%.6f", step=0.0001)
+    st.number_input(tr("ลองจิจูด"), key="office_lon", format="%.6f", step=0.0001)
+    st.text_input(tr("หรือวางพิกัดจาก Google Maps"), key="paste_coord", placeholder="13.685963, 100.621783")
+    st.button(tr("ใช้พิกัดที่วาง"), on_click=apply_pasted_coord, use_container_width=True)
     if st.session_state.get("paste_msg"):
         st.caption(st.session_state.paste_msg)
-    st.link_button("เปิดจุดเริ่มต้นใน Google Maps",
+    st.link_button(tr("เปิดจุดเริ่มต้นใน Google Maps"),
                    gmaps_point(st.session_state.office_lat, st.session_state.office_lon),
                    use_container_width=True)
-    st.caption("เลือกจากแผนที่ได้ที่แท็บ \"เลือกจุดเริ่มต้น\"")
+    st.caption(tr("เลือกจากแผนที่ได้ที่แท็บ \"เลือกจุดเริ่มต้น\""))
     st.divider()
-    st.subheader("ค่าน้ำมัน")
-    fuel_price = st.number_input("ราคาน้ำมัน (บาท/ลิตร)", min_value=0.0, value=33.5, step=0.1)
-    fuel_eff = st.number_input("อัตราสิ้นเปลือง (กม./ลิตร)", min_value=0.1, value=12.0, step=0.5)
+    st.subheader(tr("ค่าน้ำมัน"))
+    fuel_price = st.number_input(tr("ราคาน้ำมัน (บาท/ลิตร)"), min_value=0.0, value=33.5, step=0.1)
+    fuel_eff = st.number_input(tr("อัตราสิ้นเปลือง (กม./ลิตร)"), min_value=0.1, value=12.0, step=0.5)
     cost_per_km = fuel_price / fuel_eff
-    st.metric("ค่าน้ำมันต่อกิโลเมตร", f"{cost_per_km:.2f} บาท")
+    st.metric(tr("ค่าน้ำมันต่อกิโลเมตร"), tr("{0:.2f} บาท").format(trx(cost_per_km)))
 
 OLAT, OLON = st.session_state.office_lat, st.session_state.office_lon
-ONAME = st.session_state.office_name or "จุดเริ่มต้น"
+ONAME = trx(st.session_state.office_name) or tr("จุดเริ่มต้น")
 
 
 # ---------------------------------------------------------
@@ -734,44 +928,44 @@ def parse_coord(s):
 
 def point_input(title, key, default=None):
     """คืนค่า (lat, lon, ชื่อ) หรือ None ถ้ายังระบุไม่ครบ"""
-    st.markdown(f"**{title}**")
+    st.markdown(f"**{trx(title)}**")
     modes = (["ใช้จุดเริ่มต้นในแถบด้านซ้าย"] if default else []) + \
             ["ค้นหาชื่อสถานที่", "วางพิกัดจาก Google Maps"]
-    mode = st.radio(title, modes, key=f"{key}_mode", horizontal=True, label_visibility="collapsed")
+    mode = st.radio(title, modes, key=f"{key}_mode", horizontal=True, label_visibility="collapsed", format_func=trx)
     if default and mode == modes[0]:
         st.caption(f"{default[2]} ({default[0]:.6f}, {default[1]:.6f})")
         return default
     if mode == "ค้นหาชื่อสถานที่":
         c1, c2 = st.columns([3, 1])
-        q = c1.text_input("ชื่อสถานที่", key=f"{key}_q", label_visibility="collapsed",
-                          placeholder="เช่น ตลาดศรีเทพ เพชรบูรณ์")
-        if c2.button("ค้นหา", key=f"{key}_go", use_container_width=True):
+        q = c1.text_input(tr("ชื่อสถานที่"), key=f"{key}_q", label_visibility="collapsed",
+                          placeholder=tr("เช่น ตลาดศรีเทพ เพชรบูรณ์"))
+        if c2.button(tr("ค้นหา"), key=f"{key}_go", use_container_width=True):
             try:
-                st.session_state[f"{key}_res"] = geocode(q.strip()) if q.strip() else []
+                st.session_state[f"{key}_res"] = geocode(q.strip(), LANGCODE) if q.strip() else []
                 if not st.session_state[f"{key}_res"]:
-                    st.warning("ไม่พบสถานที่ที่ค้นหา")
+                    st.warning(tr("ไม่พบสถานที่ที่ค้นหา"))
             except Exception as exc:
-                st.error(f"ค้นหาไม่สำเร็จ: {exc}")
+                st.error(tr("ค้นหาไม่สำเร็จ: {0}").format(trx(exc)))
         res = st.session_state.get(f"{key}_res", [])
         if res:
-            name = st.selectbox("ผลการค้นหา", [r[0] for r in res], key=f"{key}_sel")
+            name = st.selectbox(tr("ผลการค้นหา"), [r[0] for r in res], key=f"{key}_sel", format_func=trx)
             for n, la, lo in res:
                 if n == name:
                     return la, lo, n
         return None
-    txt = st.text_input("พิกัด", key=f"{key}_xy", label_visibility="collapsed",
+    txt = st.text_input(tr("พิกัด"), key=f"{key}_xy", label_visibility="collapsed",
                         placeholder="13.685963, 100.621783")
     if txt.strip():
         p = parse_coord(txt)
         if p:
             return p[0], p[1], f"{p[0]:.5f}, {p[1]:.5f}"
-        st.warning("รูปแบบพิกัดไม่ถูกต้อง ตัวอย่าง: 13.685963, 100.621783")
+        st.warning(tr("รูปแบบพิกัดไม่ถูกต้อง ตัวอย่าง: 13.685963, 100.621783"))
     return None
 
 
 def quick_calc():
-    st.markdown('<div class="note">คำนวณระยะทาง เวลา และค่าน้ำมันระหว่างสองจุดใดก็ได้ '
-                "ไม่ต้องอัปโหลดไฟล์ KMZ (ราคาน้ำมันและอัตราสิ้นเปลืองตั้งที่แถบด้านซ้าย)</div>",
+    st.markdown(tr('<div class="note">คำนวณระยะทาง เวลา และค่าน้ำมันระหว่างสองจุดใดก็ได้ '
+                "ไม่ต้องอัปโหลดไฟล์ KMZ (ราคาน้ำมันและอัตราสิ้นเปลืองตั้งที่แถบด้านซ้าย)</div>"),
                 unsafe_allow_html=True)
     with st.container(border=True):
         o = point_input("ต้นทาง", "qo", (OLAT, OLON, ONAME))
@@ -779,32 +973,31 @@ def quick_calc():
         d = point_input("ปลายทาง", "qd")
         st.divider()
         c1, c2 = st.columns(2)
-        round_trip = c1.checkbox("ไป-กลับ", key="q_round")
-        trips = c2.number_input("จำนวนเที่ยว", min_value=1, value=1, step=1, key="q_trips")
-        avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False, key="q_avoid")
-    if st.button("คำนวณระยะทางและค่าเดินทาง", type="primary", use_container_width=True, key="q_go"):
+        round_trip = c1.checkbox(tr("ไป-กลับ"), key="q_round")
+        trips = c2.number_input(tr("จำนวนเที่ยว"), min_value=1, value=1, step=1, key="q_trips")
+        avoid = st.checkbox(tr("หลีกเลี่ยงทางด่วน"), value=False, key="q_avoid")
+    if st.button(tr("คำนวณระยะทางและค่าเดินทาง"), type="primary", use_container_width=True, key="q_go"):
         if not o or not d:
-            st.warning("กรุณาระบุทั้งต้นทางและปลายทาง")
+            st.warning(tr("กรุณาระบุทั้งต้นทางและปลายทาง"))
         else:
             try:
                 st.session_state.quick = {
                     "route": get_route(o[1], o[0], d[1], d[0], True, avoid), "o": o, "d": d}
             except Exception as exc:
-                st.error(f"ไม่สามารถคำนวณเส้นทางได้: {exc}")
+                st.error(tr("ไม่สามารถคำนวณเส้นทางได้: {0}").format(trx(exc)))
     q = st.session_state.get("quick")
     if q:
         rt, o2, d2 = q["route"], q["o"], q["d"]
         mult = (2 if round_trip else 1) * int(trips)
-        st.caption(f"จาก {o2[2]} ไปยัง {d2[2]}")
+        st.caption(tr("จาก {0} ไปยัง {1}").format(trx(o2[2]), trx(d2[2])))
         slot = st.container()
         toll = toll_panel(rt, "q")
         with slot:
             show_route({"distance_km": rt["distance_km"] * mult,
                         "duration_min": rt["duration_min"] * mult},
                        cost_per_km, toll * mult, bool(rt["tolls"]))
-        st.caption(f"ระยะทางเที่ยวเดียว {rt['distance_km']:.2f} กม. × {mult} เที่ยว "
-                   "(ไป-กลับนับเป็น 2 เที่ยว)")
-        st.link_button("เปิดนำทางใน Google Maps",
+        st.caption(tr("ระยะทางเที่ยวเดียว {0:.2f} กม. × {1} เที่ยว (ไป-กลับนับเป็น 2 เที่ยว)").format(trx(rt['distance_km']), trx(mult)))
+        st.link_button(tr("เปิดนำทางใน Google Maps"),
                        gmaps(o2[0], o2[1], d2[0], d2[1], avoid), use_container_width=True)
         st_folium(make_route_map((o2[0], o2[1]), (d2[0], d2[1]), o2[2], d2[2], rt["geometry"]),
                   use_container_width=True, height=520, key="quick_map", returned_objects=[])
@@ -815,35 +1008,35 @@ def quick_calc():
 # =========================================================
 if st.session_state.page == "upload":
     header(1)
-    st.subheader("นำเข้าไฟล์ KMZ")
-    st.markdown('<div class="note">เลือกได้หลายไฟล์พร้อมกัน เช่น หนึ่งไฟล์ต่อหนึ่งหมู่บ้าน</div>',
+    st.subheader(tr("นำเข้าไฟล์ KMZ"))
+    st.markdown(tr('<div class="note">เลือกได้หลายไฟล์พร้อมกัน เช่น หนึ่งไฟล์ต่อหนึ่งหมู่บ้าน</div>'),
                 unsafe_allow_html=True)
-    mode = st.radio("แหล่งข้อมูล", ["อัปโหลดไฟล์", "โฟลเดอร์ในเครื่อง"], horizontal=True)
+    mode = st.radio(tr("แหล่งข้อมูล"), ["อัปโหลดไฟล์", "โฟลเดอร์ในเครื่อง"], horizontal=True, format_func=trx)
     items = []
     with st.container(border=True):
         if mode == "อัปโหลดไฟล์":
-            files = st.file_uploader("เลือกไฟล์ KMZ", type=["kmz"], accept_multiple_files=True)
+            files = st.file_uploader(tr("เลือกไฟล์ KMZ"), type=["kmz"], accept_multiple_files=True)
             items = [(f.name, f) for f in files or []]
         else:
-            folder = st.text_input("Path ของโฟลเดอร์", placeholder="C:/Users/Admin/Desktop/Tobacco")
+            folder = st.text_input(tr("Path ของโฟลเดอร์"), placeholder="C:/Users/Admin/Desktop/Tobacco")
             if folder.strip() and os.path.isdir(folder):
                 paths = sorted(glob.glob(os.path.join(folder, "**", "*.kmz"), recursive=True))
                 items = [(os.path.basename(p), open(p, "rb")) for p in paths]
-                st.caption(f"พบไฟล์ KMZ {len(paths)} ไฟล์")
+                st.caption(tr("พบไฟล์ KMZ {0} ไฟล์").format(trx(len(paths))))
             elif folder.strip():
-                st.warning("ไม่พบโฟลเดอร์ที่ระบุ")
-        if st.button("โหลดไฟล์และไปขั้นตอนถัดไป", type="primary", use_container_width=True):
+                st.warning(tr("ไม่พบโฟลเดอร์ที่ระบุ"))
+        if st.button(tr("โหลดไฟล์และไปขั้นตอนถัดไป"), type="primary", use_container_width=True):
             if not items:
-                st.warning("กรุณาเลือกไฟล์ KMZ อย่างน้อยหนึ่งไฟล์")
+                st.warning(tr("กรุณาเลือกไฟล์ KMZ อย่างน้อยหนึ่งไฟล์"))
             elif load_sources(items):
                 st.session_state.page = "classify"
                 st.rerun()
             else:
-                st.error("ไม่พบข้อมูลแปลงที่ใช้งานได้ในไฟล์ที่เลือก")
+                st.error(tr("ไม่พบข้อมูลแปลงที่ใช้งานได้ในไฟล์ที่เลือก"))
     for e in st.session_state.errors:
         st.warning(e)
     st.divider()
-    if st.button("คำนวณระยะทางและค่าเดินทางทั่วไป (ไม่ต้องใช้ไฟล์ KMZ)",
+    if st.button(tr("คำนวณระยะทางและค่าเดินทางทั่วไป (ไม่ต้องใช้ไฟล์ KMZ)"),
                  use_container_width=True, key="goto_quick"):
         st.session_state.page = "quick"
         st.rerun()
@@ -853,9 +1046,9 @@ if st.session_state.page == "upload":
 # =========================================================
 elif st.session_state.page == "quick":
     header(0)
-    st.subheader("คำนวณระยะทางและค่าเดินทางทั่วไป")
+    st.subheader(tr("คำนวณระยะทางและค่าเดินทางทั่วไป"))
     quick_calc()
-    if st.button("ย้อนกลับ", use_container_width=True, key="q_back"):
+    if st.button(tr("ย้อนกลับ"), use_container_width=True, key="q_back"):
         st.session_state.page = "workspace" if st.session_state.df is not None else "upload"
         st.rerun()
 
@@ -864,21 +1057,21 @@ elif st.session_state.page == "quick":
 # =========================================================
 elif st.session_state.page == "classify":
     header(2)
-    st.subheader("จำแนกหมู่บ้าน")
-    st.success(f"อ่านไฟล์สำเร็จ {len(st.session_state.sources)} ไฟล์")
+    st.subheader(tr("จำแนกหมู่บ้าน"))
+    st.success(tr("อ่านไฟล์สำเร็จ {0} ไฟล์").format(trx(len(st.session_state.sources))))
     with st.container(border=True):
         edited = meta_editor("meta_classify")
     c1, c2 = st.columns(2)
-    if c1.button("ย้อนกลับ", use_container_width=True):
+    if c1.button(tr("ย้อนกลับ"), use_container_width=True):
         st.session_state.page = "upload"
         st.rerun()
-    if c2.button("ยืนยันและเข้าสู่หน้าวิเคราะห์", type="primary", use_container_width=True):
+    if c2.button(tr("ยืนยันและเข้าสู่หน้าวิเคราะห์"), type="primary", use_container_width=True):
         st.session_state.meta = edited
         st.session_state.df = build_df(st.session_state.sources, edited)
         st.session_state.page = "workspace"
         st.rerun()
     if st.session_state.errors:
-        with st.expander(f"ข้อผิดพลาดขณะอ่านไฟล์ ({len(st.session_state.errors)})"):
+        with st.expander(tr("ข้อผิดพลาดขณะอ่านไฟล์ ({0})").format(trx(len(st.session_state.errors)))):
             for e in st.session_state.errors:
                 st.warning(e)
 
@@ -893,27 +1086,27 @@ else:
 
     header(3)
     top1, top2 = st.columns([3, 1])
-    top1.caption(f"จุดเริ่มต้นปัจจุบัน: {ONAME} ({OLAT:.6f}, {OLON:.6f}) แก้ไขได้ที่แถบด้านซ้าย")
-    if top2.button("อัปโหลดไฟล์ใหม่", use_container_width=True):
+    top1.caption(tr("จุดเริ่มต้นปัจจุบัน: {0} ({1:.6f}, {2:.6f}) แก้ไขได้ที่แถบด้านซ้าย").format(trx(ONAME), trx(OLAT), trx(OLON)))
+    if top2.button(tr("อัปโหลดไฟล์ใหม่"), use_container_width=True):
         st.session_state.page = "upload"
         st.session_state.df = None
         st.rerun()
 
     m1, m2, m3 = st.columns(3)
-    m1.metric("จำนวนแปลงทั้งหมด", f"{len(df):,} แปลง")
-    m2.metric("จำนวนหมู่บ้าน", f"{df['Village'].nunique():,} หมู่บ้าน")
-    m3.metric("จำนวนไฟล์", f"{df['ไฟล์'].nunique():,} ไฟล์")
+    m1.metric(tr("จำนวนแปลงทั้งหมด"), tr("{0:,} แปลง").format(trx(len(df))))
+    m2.metric(tr("จำนวนหมู่บ้าน"), tr("{0:,} หมู่บ้าน").format(trx(df['Village'].nunique())))
+    m3.metric(tr("จำนวนไฟล์"), tr("{0:,} ไฟล์").format(trx(df['ไฟล์'].nunique())))
 
     t_over, t_origin, t_office, t_pair, t_map, t_track, t_vil, t_quick = st.tabs([
-        "ตารางข้อมูล", "เลือกจุดเริ่มต้น", "สำนักงานไปยังแปลง", "ระหว่างแปลง",
-        "แผนที่นำทาง", "ติดตามงาน", "จัดการหมู่บ้าน", "คำนวณทั่วไป",
+        tr("ตารางข้อมูล"), tr("เลือกจุดเริ่มต้น"), tr("สำนักงานไปยังแปลง"), tr("ระหว่างแปลง"),
+        tr("แผนที่นำทาง"), tr("ติดตามงาน"), tr("จัดการหมู่บ้าน"), tr("คำนวณทั่วไป"),
     ])
 
     # ---- Table with village filter + Google Maps link per plot
     with t_over:
         c1, c2 = st.columns([1, 1])
-        vsel = c1.multiselect("กรองตามหมู่บ้าน", sorted(df["Village"].unique()))
-        term = c2.text_input("ค้นหาเลขแปลง")
+        vsel = c1.multiselect(tr("กรองตามหมู่บ้าน"), sorted(df["Village"].unique()), format_func=trx)
+        term = c2.text_input(tr("ค้นหาเลขแปลง"))
         view = df.drop(columns=["geometry"])
         if vsel:
             view = view[view["Village"].isin(vsel)]
@@ -922,44 +1115,44 @@ else:
         view = view.copy()
         view["Google Maps"] = ("https://www.google.com/maps?q=" + view["Latitude"].astype(str)
                                + "," + view["Longitude"].astype(str))
-        st.dataframe(view, use_container_width=True, hide_index=True,
+        st.dataframe(dfx(view), use_container_width=True, hide_index=True,
                      column_config={"Google Maps": st.column_config.LinkColumn(
-                         "Google Maps", display_text="เปิดแผนที่")})
-        st.download_button("ดาวน์โหลด CSV", view.to_csv(index=False).encode("utf-8-sig"),
+                         "Google Maps", display_text=tr("เปิดแผนที่"))})
+        st.download_button(tr("ดาวน์โหลด CSV"), view.to_csv(index=False).encode("utf-8-sig"),
                            "tobacco_plots.csv", "text/csv")
-        st.markdown("##### สรุปรายหมู่บ้าน")
-        st.dataframe(df.groupby(["Village", "Group"]).size().reset_index(name="จำนวนแปลง"),
+        st.markdown(tr("##### สรุปรายหมู่บ้าน"))
+        st.dataframe(dfx(df.groupby(["Village", "Group"]).size().reset_index(name="จำนวนแปลง")),
                      use_container_width=True, hide_index=True)
 
     # ---- Pick origin on a Google-style map
     with t_origin:
-        st.markdown("#### เลือกจุดเริ่มต้นจากแผนที่")
-        st.markdown('<div class="note">คลิกบนแผนที่เพื่อปักหมุด หรือค้นหาชื่อสถานที่ '
-                    "แล้วกด \"ใช้จุดนี้เป็นจุดเริ่มต้น\" (สลับดาวเทียมได้ที่มุมขวาบนของแผนที่)</div>",
+        st.markdown(tr("#### เลือกจุดเริ่มต้นจากแผนที่"))
+        st.markdown(tr('<div class="note">คลิกบนแผนที่เพื่อปักหมุด หรือค้นหาชื่อสถานที่ '
+                    "แล้วกด \"ใช้จุดนี้เป็นจุดเริ่มต้น\" (สลับดาวเทียมได้ที่มุมขวาบนของแผนที่)</div>"),
                     unsafe_allow_html=True)
         s1, s2 = st.columns([3, 1])
-        q = s1.text_input("ค้นหาสถานที่", key="geo_q", placeholder="เช่น ตลาดศรีเทพ เพชรบูรณ์")
+        q = s1.text_input(tr("ค้นหาสถานที่"), key="geo_q", placeholder=tr("เช่น ตลาดศรีเทพ เพชรบูรณ์"))
         s2.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
-        if s2.button("ค้นหา", use_container_width=True, key="geo_go"):
+        if s2.button(tr("ค้นหา"), use_container_width=True, key="geo_go"):
             try:
-                st.session_state.geo_results = geocode(q.strip()) if q.strip() else []
+                st.session_state.geo_results = geocode(q.strip(), LANGCODE) if q.strip() else []
                 if not st.session_state.geo_results:
-                    st.warning("ไม่พบสถานที่ที่ค้นหา")
+                    st.warning(tr("ไม่พบสถานที่ที่ค้นหา"))
             except Exception as exc:
-                st.error(f"ค้นหาไม่สำเร็จ: {exc}")
+                st.error(tr("ค้นหาไม่สำเร็จ: {0}").format(trx(exc)))
         if st.session_state.geo_results:
-            st.selectbox("ผลการค้นหา", [r[0] for r in st.session_state.geo_results],
-                         key="geo_choice", on_change=apply_geo_choice)
+            st.selectbox(tr("ผลการค้นหา"), [r[0] for r in st.session_state.geo_results],
+                         key="geo_choice", on_change=apply_geo_choice, format_func=trx)
             if st.session_state.pick_point is None:
                 apply_geo_choice()
 
         pick = st.session_state.pick_point
         center = list(pick) if pick else [OLAT, OLON]
         pm = base_map(center, 14 if pick else 12)
-        folium.Marker([OLAT, OLON], tooltip=f"จุดเริ่มต้นปัจจุบัน: {ONAME}",
+        folium.Marker([OLAT, OLON], tooltip=tr("จุดเริ่มต้นปัจจุบัน: {0}").format(trx(ONAME)),
                       icon=folium.Icon(color="blue", icon="home")).add_to(pm)
         if pick:
-            folium.Marker(list(pick), tooltip="จุดที่เลือก",
+            folium.Marker(list(pick), tooltip=tr("จุดที่เลือก"),
                           icon=folium.Icon(color="red", icon="map-marker")).add_to(pm)
         out = st_folium(pm, use_container_width=True, height=520, key="origin_map",
                         returned_objects=["last_clicked"])
@@ -971,28 +1164,28 @@ else:
                 st.rerun()
 
         if pick:
-            st.markdown(f"**จุดที่เลือก:** {pick[0]:.6f}, {pick[1]:.6f}")
+            st.markdown(tr("**จุดที่เลือก:** {0:.6f}, {1:.6f}").format(trx(pick[0]), trx(pick[1])))
             n1, n2, n3 = st.columns([2, 1.2, 1.2])
-            n1.text_input("ตั้งชื่อจุดเริ่มต้น (ไม่บังคับ)", key="pick_name", placeholder=ONAME)
+            n1.text_input(tr("ตั้งชื่อจุดเริ่มต้น (ไม่บังคับ)"), key="pick_name", placeholder=ONAME)
             n2.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
-            n2.button("ใช้จุดนี้เป็นจุดเริ่มต้น", type="primary", on_click=apply_pick,
+            n2.button(tr("ใช้จุดนี้เป็นจุดเริ่มต้น"), type="primary", on_click=apply_pick,
                       use_container_width=True)
             n3.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
-            n3.link_button("เปิดใน Google Maps", gmaps_point(*pick), use_container_width=True)
+            n3.link_button(tr("เปิดใน Google Maps"), gmaps_point(*pick), use_container_width=True)
         else:
-            st.caption("ยังไม่ได้เลือกจุด คลิกบนแผนที่หรือค้นหาสถานที่ได้เลย")
+            st.caption(tr("ยังไม่ได้เลือกจุด คลิกบนแผนที่หรือค้นหาสถานที่ได้เลย"))
         if st.session_state.get("pick_msg"):
             st.success(st.session_state.pick_msg)
 
     # ---- Office to all plots (fast: batched OSRM table API)
     with t_office:
-        st.markdown(f"#### ระยะทางจาก{ONAME}ไปยังทุกแปลง")
-        if st.button("คำนวณระยะทางทั้งหมด", type="primary", key="calc_all"):
-            bar = st.progress(0, text="กำลังคำนวณ...")
+        st.markdown(tr("#### ระยะทางจาก{0}ไปยังทุกแปลง").format(trx(ONAME)))
+        if st.button(tr("คำนวณระยะทางทั้งหมด"), type="primary", key="calc_all"):
+            bar = st.progress(0, text=tr("กำลังคำนวณ..."))
             t0 = time.time()
 
             def _cb(done, total):
-                bar.progress(done / total, text=f"คำนวณแล้ว {done:,}/{total:,} แปลง")
+                bar.progress(done / total, text=tr("คำนวณแล้ว {0:,}/{1:,} แปลง").format(trx(done), trx(total)))
 
             res = office_distances(OLON, OLAT, df["Longitude"].tolist(), df["Latitude"].tolist(), _cb)
             bar.empty()
@@ -1001,41 +1194,40 @@ else:
             df["travel_cost_thb"] = df["distance_km"] * cost_per_km
             st.session_state.df = df
             st.session_state.calc_origin = (OLAT, OLON)
-            st.caption(f"ใช้เวลา {time.time() - t0:.1f} วินาที")
+            st.caption(tr("ใช้เวลา {0:.1f} วินาที").format(trx(time.time() - t0)))
         if "distance_km" in df.columns:
             if st.session_state.calc_origin != (OLAT, OLON):
-                st.warning("จุดเริ่มต้นถูกเปลี่ยนหลังคำนวณ กรุณากดคำนวณใหม่")
+                st.warning(tr("จุดเริ่มต้นถูกเปลี่ยนหลังคำนวณ กรุณากดคำนวณใหม่"))
             ok = df["distance_km"].dropna()
             if len(ok) < len(df):
-                st.info(f"คำนวณไม่ได้ {len(df) - len(ok)} แปลง (อาจอยู่ไกลถนน หรือเซิร์ฟเวอร์ตอบช้า) กดคำนวณใหม่ได้")
+                st.info(tr("คำนวณไม่ได้ {0} แปลง (อาจอยู่ไกลถนน หรือเซิร์ฟเวอร์ตอบช้า) กดคำนวณใหม่ได้").format(trx(len(df) - len(ok))))
             a, b, c = st.columns(3)
-            a.metric("แปลงที่คำนวณได้", f"{len(ok):,} / {len(df):,}")
-            b.metric("ระยะทางเฉลี่ย", f"{ok.mean():.2f} กม." if len(ok) else "-")
-            c.metric("ค่าน้ำมันเฉลี่ย", f"{df['travel_cost_thb'].mean():.2f} บาท" if len(ok) else "-")
+            a.metric(tr("แปลงที่คำนวณได้"), f"{len(ok):,} / {len(df):,}")
+            b.metric(tr("ระยะทางเฉลี่ย"), tr("{0:.2f} กม.").format(trx(ok.mean())) if len(ok) else "-")
+            c.metric(tr("ค่าน้ำมันเฉลี่ย"), tr("{0:.2f} บาท").format(trx(df['travel_cost_thb'].mean())) if len(ok) else "-")
             cols = ["No.", "Village", "Group", "Attribute", "distance_km", "travel_cost_thb"]
-            st.dataframe(df[cols], use_container_width=True, hide_index=True)
+            st.dataframe(dfx(df[cols]), use_container_width=True, hide_index=True)
         else:
-            st.caption("ยังไม่มีผลการคำนวณ")
+            st.caption(tr("ยังไม่มีผลการคำนวณ"))
 
-        st.markdown("##### เลือกเส้นทางไปยังแปลงใน Google Maps")
+        st.markdown(tr("##### เลือกเส้นทางไปยังแปลงใน Google Maps"))
         with st.container(border=True):
             gp, gn = plot_picker(df, "ที่ต้องการไป", "office_gm")
-            g_avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False, key="office_gm_avoid")
+            g_avoid = st.checkbox(tr("หลีกเลี่ยงทางด่วน"), value=False, key="office_gm_avoid")
         if "distance_km" in df.columns and pd.notna(gp["distance_km"]):
-            st.caption(f"{gn}: ระยะทางขับขี่ประมาณ {gp['distance_km']:.2f} กม. "
-                       f"ค่าน้ำมันประมาณ {gp['travel_cost_thb']:.2f} บาท")
-        st.link_button(f"เปิดเส้นทางจาก{ONAME}ไป {gn} ใน Google Maps",
+            st.caption(tr("{0}: ระยะทางขับขี่ประมาณ {1:.2f} กม. ค่าน้ำมันประมาณ {2:.2f} บาท").format(trx(gn), trx(gp['distance_km']), trx(gp['travel_cost_thb'])))
+        st.link_button(tr("เปิดเส้นทางจาก{0}ไป {1} ใน Google Maps").format(trx(ONAME), trx(gn)),
                        gmaps(OLAT, OLON, gp["Latitude"], gp["Longitude"], g_avoid),
                        use_container_width=True)
 
     # ---- Plot to plot (any village)
     with t_pair:
-        st.markdown("#### ระยะทางระหว่างแปลง (ในหมู่บ้านเดียวกันหรือข้ามหมู่บ้าน)")
+        st.markdown(tr("#### ระยะทางระหว่างแปลง (ในหมู่บ้านเดียวกันหรือข้ามหมู่บ้าน)"))
         with st.container(border=True):
             p1, n1 = plot_picker(df, "ต้นทาง", "pp1")
             p2, n2 = plot_picker(df, "ปลายทาง", "pp2")
-            pp_avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False, key="pp_avoid")
-        if st.button("คำนวณระยะทาง", type="primary", key="calc_pair"):
+            pp_avoid = st.checkbox(tr("หลีกเลี่ยงทางด่วน"), value=False, key="pp_avoid")
+        if st.button(tr("คำนวณระยะทาง"), type="primary", key="calc_pair"):
             try:
                 st.session_state.pair_res = {
                     "rt": get_route(p1["Longitude"], p1["Latitude"], p2["Longitude"], p2["Latitude"],
@@ -1043,24 +1235,24 @@ else:
                     "n1": n1, "n2": n2, "avoid": pp_avoid,
                     "a": (p1["Latitude"], p1["Longitude"]), "b": (p2["Latitude"], p2["Longitude"])}
             except Exception as exc:
-                st.error(f"ไม่สามารถคำนวณเส้นทางได้: {exc}")
+                st.error(tr("ไม่สามารถคำนวณเส้นทางได้: {0}").format(trx(exc)))
         pr = st.session_state.get("pair_res")
         if pr:
-            st.caption(f"จาก {pr['n1']} ไปยัง {pr['n2']}")
+            st.caption(tr("จาก {0} ไปยัง {1}").format(trx(pr['n1']), trx(pr['n2'])))
             slot = st.container()
             toll = toll_panel(pr["rt"], "pp")
             with slot:
                 show_route(pr["rt"], cost_per_km, toll, bool(pr["rt"]["tolls"]))
-            st.link_button("เปิดเส้นทางใน Google Maps",
+            st.link_button(tr("เปิดเส้นทางใน Google Maps"),
                            gmaps(*pr["a"], *pr["b"], pr["avoid"]), use_container_width=True)
 
     # ---- Navigation map
     with t_map:
-        st.markdown(f"#### เส้นทางจาก{ONAME}ไปยังแปลงเป้าหมาย")
+        st.markdown(tr("#### เส้นทางจาก{0}ไปยังแปลงเป้าหมาย").format(trx(ONAME)))
         with st.container(border=True):
             tp, tn = plot_picker(df, "เป้าหมาย", "nav")
-            avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False)
-        if st.button("ค้นหาเส้นทางและแสดงแผนที่", type="primary", key="nav_go"):
+            avoid = st.checkbox(tr("หลีกเลี่ยงทางด่วน"), value=False)
+        if st.button(tr("ค้นหาเส้นทางและแสดงแผนที่"), type="primary", key="nav_go"):
             try:
                 rt = get_route(OLON, OLAT, tp["Longitude"], tp["Latitude"], True, avoid)
                 st.session_state.route_summary = rt
@@ -1068,14 +1260,14 @@ else:
                     (OLAT, OLON), (tp["Latitude"], tp["Longitude"]), ONAME, tn, rt["geometry"])
                 st.session_state.route_link = gmaps(OLAT, OLON, tp["Latitude"], tp["Longitude"], avoid)
             except Exception as exc:
-                st.error(f"ไม่สามารถสร้างเส้นทางได้: {exc}")
+                st.error(tr("ไม่สามารถสร้างเส้นทางได้: {0}").format(trx(exc)))
         if st.session_state.route_summary:
             rs = st.session_state.route_summary
             slot = st.container()
             nav_toll = toll_panel(rs, "nav")
             with slot:
                 show_route(rs, cost_per_km, nav_toll, bool(rs["tolls"]))
-            st.link_button("เปิดนำทางใน Google Maps", st.session_state.route_link,
+            st.link_button(tr("เปิดนำทางใน Google Maps"), st.session_state.route_link,
                            use_container_width=True)
             st_folium(st.session_state.route_map, use_container_width=True, height=520,
                       key="route_map_view", returned_objects=[])
@@ -1091,9 +1283,9 @@ else:
             st.success(st.session_state.pop("trk_msg"))
 
         a, b, c = st.columns(3)
-        a.metric("เสร็จแล้ว", f"{done_n:,} แปลง")
-        b.metric("ยังไม่เสร็จ", f"{total - done_n:,} แปลง")
-        c.metric("ความคืบหน้า", f"{done_n / total * 100:.1f}%")
+        a.metric(tr("เสร็จแล้ว"), tr("{0:,} แปลง").format(trx(done_n)))
+        b.metric(tr("ยังไม่เสร็จ"), tr("{0:,} แปลง").format(trx(total - done_n)))
+        c.metric(tr("ความคืบหน้า"), f"{done_n / total * 100:.1f}%")
         st.progress(done_n / total if total else 0.0)
 
         # สรุปรายหมู่บ้าน (หมู่บ้านที่เสร็จครบทุกแปลงจะเป็นสีเขียว)
@@ -1102,17 +1294,17 @@ else:
         summ["เสร็จแล้ว"] = summ["เสร็จแล้ว"].astype(int)
         summ["คงเหลือ"] = summ["จำนวนแปลงทั้งหมด"] - summ["เสร็จแล้ว"]
         summ["% เสร็จ"] = (summ["เสร็จแล้ว"] / summ["จำนวนแปลงทั้งหมด"] * 100).round(1)
-        st.markdown("##### สรุปรายหมู่บ้าน")
+        st.markdown(tr("##### สรุปรายหมู่บ้าน"))
         st.dataframe(
-            summ.style.apply(lambda r: [GREEN] * len(r) if r["คงเหลือ"] == 0 else [""] * len(r), axis=1),
+            dfx(summ.style.apply(lambda r: [GREEN] * len(r) if r["คงเหลือ"] == 0 else [""] * len(r), axis=1)),
             use_container_width=True, hide_index=True)
 
         # ติ๊กสถานะแปลง
-        st.markdown("##### ทำเครื่องหมายแปลงที่ไปเสร็จแล้ว")
+        st.markdown(tr("##### ทำเครื่องหมายแปลงที่ไปเสร็จแล้ว"))
         f1, f2, f3 = st.columns([2, 1, 1])
-        vsel = f1.multiselect("กรองตามหมู่บ้าน", sorted(df["Village"].unique()), key="trk_v")
-        stat = f2.selectbox("แสดง", ["ทั้งหมด", "ยังไม่เสร็จ", "เสร็จแล้ว"], key="trk_s")
-        term = f3.text_input("ค้นหาเลขแปลง", key="trk_t")
+        vsel = f1.multiselect(tr("กรองตามหมู่บ้าน"), sorted(df["Village"].unique()), key="trk_v", format_func=trx)
+        stat = f2.selectbox(tr("แสดง"), ["ทั้งหมด", "ยังไม่เสร็จ", "เสร็จแล้ว"], key="trk_s", format_func=trx)
+        term = f3.text_input(tr("ค้นหาเลขแปลง"), key="trk_t")
         view = trk
         if vsel:
             view = view[view["Village"].isin(vsel)]
@@ -1130,11 +1322,13 @@ else:
             disabled=["Village", "Attribute", "วันที่เสร็จ"],
             column_config={
                 "_key": None,
-                "Village": st.column_config.TextColumn("หมู่บ้าน"),
-                "Attribute": st.column_config.TextColumn("เลขแปลง"),
-                "เสร็จแล้ว": st.column_config.CheckboxColumn("เสร็จแล้ว"),
+                "Village": st.column_config.TextColumn(tr("หมู่บ้าน")),
+                "Attribute": st.column_config.TextColumn(tr("เลขแปลง")),
+                "เสร็จแล้ว": st.column_config.CheckboxColumn(tr("เสร็จแล้ว")),
+                "วันที่เสร็จ": st.column_config.TextColumn(tr("วันที่เสร็จ")),
+                "หมายเหตุ": st.column_config.TextColumn(tr("หมายเหตุ")),
             })
-        if st.button("บันทึกสถานะ", type="primary", use_container_width=True, key="trk_save"):
+        if st.button(tr("บันทึกสถานะ"), type="primary", use_container_width=True, key="trk_save"):
             now = now_th().strftime("%Y-%m-%d %H:%M")
             for _, r in edited.iterrows():
                 k = r["_key"]
@@ -1146,16 +1340,16 @@ else:
                     prog.pop(k, None)
             save_progress(prog)
             st.session_state.trk_ver += 1
-            st.session_state.trk_msg = "บันทึกสถานะแล้ว"
+            st.session_state.trk_msg = tr("บันทึกสถานะแล้ว")
             st.rerun()
 
         # แปลงที่เสร็จแล้ว (กด ✕ แดงท้ายแถวเพื่อยกเลิกสถานะที่ติ๊กผิด)
         done_view = trk[trk["เสร็จแล้ว"]].drop_duplicates("_key")
-        st.markdown(f"##### แปลงที่เสร็จแล้ว ({len(done_view):,} แปลง)")
+        st.markdown(tr("##### แปลงที่เสร็จแล้ว ({0:,} แปลง)").format(trx(len(done_view))))
         if len(done_view):
             W = [3, 1.3, 2, 2.5, 0.8]
             for c, t in zip(st.columns(W), ["หมู่บ้าน", "เลขแปลง", "วันที่เสร็จ", "หมายเหตุ", "ลบ"]):
-                c.markdown(f"**{t}**")
+                c.markdown(f"**{tr(t)}**")
             with st.container(height=420):
                 for _, r in done_view.iterrows():
                     c = st.columns(W)
@@ -1163,20 +1357,18 @@ else:
                     c[1].markdown(str(r["Attribute"]))
                     c[2].markdown(r["วันที่เสร็จ"])
                     c[3].markdown(r["หมายเหตุ"] or "-")
-                    if c[4].button("✕", key=f"del_{r['_key']}", help="ยกเลิกสถานะเสร็จของแปลงนี้"):
+                    if c[4].button("✕", key=f"del_{r['_key']}", help=tr("ยกเลิกสถานะเสร็จของแปลงนี้")):
                         prog.pop(r["_key"], None)
                         save_progress(prog)
                         st.session_state.trk_ver += 1
-                        st.session_state.trk_msg = f"ยกเลิกสถานะ {r['Village']} แปลง {r['Attribute']} แล้ว"
+                        st.session_state.trk_msg = tr("ยกเลิกสถานะ {0} แปลง {1} แล้ว").format(trx(r['Village']), trx(r['Attribute']))
                         st.rerun()
         else:
-            st.caption("ยังไม่มีแปลงที่ทำเครื่องหมายว่าเสร็จ")
+            st.caption(tr("ยังไม่มีแปลงที่ทำเครื่องหมายว่าเสร็จ"))
 
         # รายงาน
-        st.markdown("##### รายงาน")
-        st.caption(f"ณ วันที่ {now_th().strftime('%d/%m/%Y %H:%M')} "
-                   f"เสร็จแล้ว {done_n:,} จาก {total:,} แปลง "
-                   f"({int((summ['คงเหลือ'] == 0).sum())} จาก {len(summ)} หมู่บ้านเสร็จครบ)")
+        st.markdown(tr("##### รายงาน"))
+        st.caption(tr("ณ วันที่ {0} เสร็จแล้ว {1:,} จาก {2:,} แปลง ({3} จาก {4} หมู่บ้านเสร็จครบ)").format(trx(now_th().strftime('%d/%m/%Y %H:%M')), trx(done_n), trx(total), trx(int((summ['คงเหลือ'] == 0).sum())), trx(len(summ))))
         rep = trk.drop(columns=["_key"]).copy()
         rep["สถานะ"] = rep["เสร็จแล้ว"].map({True: "เสร็จแล้ว", False: "ยังไม่เสร็จ"})
         rep = rep.drop(columns=["เสร็จแล้ว"])
@@ -1184,34 +1376,34 @@ else:
         d1, d2 = st.columns(2)
         try:
             mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            d1.download_button("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (Excel)",
+            d1.download_button(tr("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (Excel)"),
                                to_xlsx({"สรุปรายหมู่บ้าน": summ}),
                                f"report_summary_{stamp}.xlsx", mime, use_container_width=True)
-            d2.download_button("ดาวน์โหลดรายงานรายแปลง (Excel)",
+            d2.download_button(tr("ดาวน์โหลดรายงานรายแปลง (Excel)"),
                                to_xlsx({"รายงานรายแปลง": rep}, green_col="สถานะ"),
                                f"report_plots_{stamp}.xlsx", mime, use_container_width=True)
         except ImportError:
-            st.warning("ยังไม่ได้ติดตั้ง openpyxl จึงดาวน์โหลดเป็น CSV แทน (ติดตั้งด้วย pip install openpyxl)")
-            d1.download_button("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (CSV)",
+            st.warning(tr("ยังไม่ได้ติดตั้ง openpyxl จึงดาวน์โหลดเป็น CSV แทน (ติดตั้งด้วย pip install openpyxl)"))
+            d1.download_button(tr("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (CSV)"),
                                summ.to_csv(index=False).encode("utf-8-sig"),
                                f"report_summary_{stamp}.csv", "text/csv", use_container_width=True)
-            d2.download_button("ดาวน์โหลดรายงานรายแปลง (CSV)",
+            d2.download_button(tr("ดาวน์โหลดรายงานรายแปลง (CSV)"),
                                rep.to_csv(index=False).encode("utf-8-sig"),
                                f"report_plots_{stamp}.csv", "text/csv", use_container_width=True)
 
     # ---- Re-classify villages any time
     with t_vil:
-        st.markdown("#### แก้ไขการจำแนกหมู่บ้าน")
+        st.markdown(tr("#### แก้ไขการจำแนกหมู่บ้าน"))
         edited = meta_editor("meta_workspace")
-        if st.button("บันทึกและอัปเดตข้อมูล", type="primary", key="save_meta"):
+        if st.button(tr("บันทึกและอัปเดตข้อมูล"), type="primary", key="save_meta"):
             st.session_state.meta = edited
             st.session_state.df = build_df(st.session_state.sources, edited)
             st.session_state.route_map = st.session_state.route_summary = None
-            st.success("อัปเดตการจำแนกหมู่บ้านแล้ว (ต้องคำนวณระยะทางทั้งหมดใหม่)")
+            st.success(tr("อัปเดตการจำแนกหมู่บ้านแล้ว (ต้องคำนวณระยะทางทั้งหมดใหม่)"))
             st.rerun()
 
     # ---- Quick calculator
     with t_quick:
         quick_calc()
 
-    st.caption("หมายเหตุ: ระยะทางและเวลาเป็นค่าประมาณจาก OSRM ค่าน้ำมันคำนวณจากค่าที่ตั้งไว้ในแถบด้านซ้าย")
+    st.caption(tr("หมายเหตุ: ระยะทางและเวลาเป็นค่าประมาณจาก OSRM ค่าน้ำมันคำนวณจากค่าที่ตั้งไว้ในแถบด้านซ้าย"))
