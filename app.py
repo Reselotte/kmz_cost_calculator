@@ -6,6 +6,8 @@ import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import json
+from datetime import datetime
 import pyogrio
 import folium
 import geopandas as gpd
@@ -148,7 +150,40 @@ DEFAULTS = {
 for k, v in DEFAULTS.items():
     st.session_state.setdefault(k, v)
 
+PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plot_progress.json")
 
+
+def load_progress():
+    try:
+        with open(PROGRESS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_progress(data):
+    with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+
+
+def plot_key(village, attr):
+    return f"{village}|{attr}"
+
+
+def tracking_df(df, prog):
+    t = df[["No.", "Village", "Group", "Attribute", "Latitude", "Longitude"]].copy()
+    keys = [plot_key(v, str(a)) for v, a in zip(t["Village"], t["Attribute"])]
+    t["เสร็จแล้ว"] = [k in prog for k in keys]
+    t["วันที่เสร็จ"] = [prog.get(k, {}).get("at", "") for k in keys]
+    t["หมายเหตุ"] = [prog.get(k, {}).get("note", "") for k in keys]
+    t["_key"] = keys
+    return t
+
+
+GREEN = "background-color:#2E8B57;color:#FFFFFF"
+
+st.session_state.setdefault("progress", load_progress())
+st.session_state.setdefault("trk_ver", 0)
 # ---------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------
@@ -600,9 +635,9 @@ else:
     m2.metric("จำนวนหมู่บ้าน", f"{df['Village'].nunique():,} หมู่บ้าน")
     m3.metric("จำนวนไฟล์", f"{df['ไฟล์'].nunique():,} ไฟล์")
 
-    t_over, t_origin, t_office, t_pair, t_map, t_vil, t_quick = st.tabs([
+    t_over, t_origin, t_office, t_pair, t_map, t_track, t_vil, t_quick = st.tabs([
         "ตารางข้อมูล", "เลือกจุดเริ่มต้น", "สำนักงานไปยังแปลง", "ระหว่างแปลง",
-        "แผนที่นำทาง", "จัดการหมู่บ้าน", "คำนวณทั่วไป",
+        "แผนที่นำทาง", "ติดตามงาน", "จัดการหมู่บ้าน", "คำนวณทั่วไป",
     ])
 
     # ---- Table with village filter + Google Maps link per plot
@@ -763,6 +798,101 @@ else:
             st_folium(st.session_state.route_map, use_container_width=True, height=520,
                       key="route_map_view", returned_objects=[])
 
+    # ---- Progress tracking + report
+    with t_track:
+        prog = st.session_state.progress
+        trk = tracking_df(df, prog)
+        total = len(trk)
+        done_n = int(trk["เสร็จแล้ว"].sum())
+
+        if st.session_state.get("trk_msg"):
+            st.success(st.session_state.pop("trk_msg"))
+
+        a, b, c = st.columns(3)
+        a.metric("เสร็จแล้ว", f"{done_n:,} แปลง")
+        b.metric("ยังไม่เสร็จ", f"{total - done_n:,} แปลง")
+        c.metric("ความคืบหน้า", f"{done_n / total * 100:.1f}%")
+        st.progress(done_n / total if total else 0.0)
+
+        # สรุปรายหมู่บ้าน (หมู่บ้านที่เสร็จครบทุกแปลงจะเป็นสีเขียว)
+        summ = trk.groupby(["Village", "Group"])["เสร็จแล้ว"].agg(["size", "sum"]).reset_index()
+        summ.columns = ["หมู่บ้าน", "Group", "จำนวนแปลงทั้งหมด", "เสร็จแล้ว"]
+        summ["เสร็จแล้ว"] = summ["เสร็จแล้ว"].astype(int)
+        summ["คงเหลือ"] = summ["จำนวนแปลงทั้งหมด"] - summ["เสร็จแล้ว"]
+        summ["% เสร็จ"] = (summ["เสร็จแล้ว"] / summ["จำนวนแปลงทั้งหมด"] * 100).round(1)
+        st.markdown("##### สรุปรายหมู่บ้าน")
+        st.dataframe(
+            summ.style.apply(lambda r: [GREEN] * len(r) if r["คงเหลือ"] == 0 else [""] * len(r), axis=1),
+            use_container_width=True, hide_index=True)
+
+        # ติ๊กสถานะแปลง
+        st.markdown("##### ทำเครื่องหมายแปลงที่ไปเสร็จแล้ว")
+        f1, f2, f3 = st.columns([2, 1, 1])
+        vsel = f1.multiselect("กรองตามหมู่บ้าน", sorted(df["Village"].unique()), key="trk_v")
+        stat = f2.selectbox("แสดง", ["ทั้งหมด", "ยังไม่เสร็จ", "เสร็จแล้ว"], key="trk_s")
+        term = f3.text_input("ค้นหาเลขแปลง", key="trk_t")
+        view = trk
+        if vsel:
+            view = view[view["Village"].isin(vsel)]
+        if stat == "ยังไม่เสร็จ":
+            view = view[~view["เสร็จแล้ว"]]
+        elif stat == "เสร็จแล้ว":
+            view = view[view["เสร็จแล้ว"]]
+        if term.strip():
+            view = view[view["Attribute"].astype(str).str.contains(term.strip(), case=False, na=False)]
+
+        ed_key = f"trk_ed_{st.session_state.trk_ver}_{'|'.join(vsel)}_{stat}_{term}"
+        edited = st.data_editor(
+            view[["Village", "Attribute", "เสร็จแล้ว", "วันที่เสร็จ", "หมายเหตุ", "_key"]],
+            key=ed_key, hide_index=True, use_container_width=True,
+            disabled=["Village", "Attribute", "วันที่เสร็จ"],
+            column_config={
+                "_key": None,
+                "Village": st.column_config.TextColumn("หมู่บ้าน"),
+                "Attribute": st.column_config.TextColumn("เลขแปลง"),
+                "เสร็จแล้ว": st.column_config.CheckboxColumn("เสร็จแล้ว"),
+            })
+        if st.button("บันทึกสถานะ", type="primary", use_container_width=True, key="trk_save"):
+            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            for _, r in edited.iterrows():
+                k = r["_key"]
+                note = "" if pd.isna(r["หมายเหตุ"]) else str(r["หมายเหตุ"]).strip()
+                if r["เสร็จแล้ว"]:
+                    old = prog.get(k)
+                    prog[k] = {"at": old["at"] if old else now, "note": note}
+                else:
+                    prog.pop(k, None)
+            save_progress(prog)
+            st.session_state.trk_ver += 1
+            st.session_state.trk_msg = "บันทึกสถานะแล้ว"
+            st.rerun()
+
+        # แปลงที่เสร็จแล้ว (สีเขียว)
+        done_view = trk[trk["เสร็จแล้ว"]][["Village", "Group", "Attribute", "วันที่เสร็จ", "หมายเหตุ"]]
+        st.markdown(f"##### แปลงที่เสร็จแล้ว ({len(done_view):,} แปลง)")
+        if len(done_view):
+            st.dataframe(done_view.style.apply(lambda r: [GREEN] * len(r), axis=1),
+                         use_container_width=True, hide_index=True)
+        else:
+            st.caption("ยังไม่มีแปลงที่ทำเครื่องหมายว่าเสร็จ")
+
+        # รายงาน
+        st.markdown("##### รายงาน")
+        st.caption(f"ณ วันที่ {datetime.now().strftime('%d/%m/%Y %H:%M')} "
+                   f"เสร็จแล้ว {done_n:,} จาก {total:,} แปลง "
+                   f"({int((summ['คงเหลือ'] == 0).sum())} จาก {len(summ)} หมู่บ้านเสร็จครบ)")
+        rep = trk.drop(columns=["_key"]).copy()
+        rep["สถานะ"] = rep["เสร็จแล้ว"].map({True: "เสร็จแล้ว", False: "ยังไม่เสร็จ"})
+        rep = rep.drop(columns=["เสร็จแล้ว"])
+        stamp = datetime.now().strftime("%Y%m%d_%H%M")
+        d1, d2 = st.columns(2)
+        d1.download_button("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (CSV)",
+                           summ.to_csv(index=False).encode("utf-8-sig"),
+                           f"report_summary_{stamp}.csv", "text/csv", use_container_width=True)
+        d2.download_button("ดาวน์โหลดรายงานรายแปลง (CSV)",
+                           rep.to_csv(index=False).encode("utf-8-sig"),
+                           f"report_plots_{stamp}.csv", "text/csv", use_container_width=True)
+
     # ---- Re-classify villages any time
     with t_vil:
         st.markdown("#### แก้ไขการจำแนกหมู่บ้าน")
@@ -775,4 +905,5 @@ else:
             st.rerun()
     with t_quick:
         quick_calc()
+
     st.caption("หมายเหตุ: ระยะทางและเวลาเป็นค่าประมาณจาก OSRM ค่าน้ำมันคำนวณจากค่าที่ตั้งไว้ในแถบด้านซ้าย")
