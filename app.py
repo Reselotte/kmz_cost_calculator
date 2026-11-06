@@ -135,8 +135,7 @@ vars_css = ":root{" + "".join(f"--{k}:{v};" for k, v in P.items()) + \
 st.markdown(f"<style>{vars_css}{STATIC_CSS}{DF_DARK_CSS if IS_DARK else ''}</style>",
             unsafe_allow_html=True)
 
-fiona.drvsupport.supported_drivers.setdefault("KML", "rw")
-fiona.drvsupport.supported_drivers.setdefault("LIBKML", "rw")
+
 OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
 OSRM_TABLE = "https://router.project-osrm.org/table/v1/driving"
 
