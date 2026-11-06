@@ -884,30 +884,34 @@ def apply_geo_choice():
 
 
 with st.sidebar:
-    st.radio("ภาษา / Language", ["ไทย", "English"], key="lang_choice", horizontal=True)
-    st.header(tr("ตั้งค่าระบบ"))
-    st.subheader(tr("สีของหน้าเว็บ"))
-    st.radio(tr("โหมด"), ["มืด", "สว่าง", "ตามระบบ"], key="theme_mode", horizontal=True, format_func=trx)
-    st.radio(tr("โทนสี"), list(THEMES), key="theme_accent", horizontal=True, format_func=trx)
-    st.divider()
-    st.subheader(tr("จุดเริ่มต้นการเดินทาง"))
-    st.text_input(tr("ชื่อจุดเริ่มต้น"), key="office_name")
-    st.number_input(tr("ละติจูด"), key="office_lat", format="%.6f", step=0.0001)
-    st.number_input(tr("ลองจิจูด"), key="office_lon", format="%.6f", step=0.0001)
-    st.text_input(tr("หรือวางพิกัดจาก Google Maps"), key="paste_coord", placeholder="13.685963, 100.621783")
-    st.button(tr("ใช้พิกัดที่วาง"), on_click=apply_pasted_coord, use_container_width=True)
-    if st.session_state.get("paste_msg"):
-        st.caption(st.session_state.paste_msg)
-    st.link_button(tr("เปิดจุดเริ่มต้นใน Google Maps"),
-                   gmaps_point(st.session_state.office_lat, st.session_state.office_lon),
-                   use_container_width=True)
-    st.caption(tr("เลือกจากแผนที่ได้ที่แท็บ \"เลือกจุดเริ่มต้น\""))
-    st.divider()
-    st.subheader(tr("ค่าน้ำมัน"))
-    fuel_price = st.number_input(tr("ราคาน้ำมัน (บาท/ลิตร)"), min_value=0.0, value=33.5, step=0.1)
-    fuel_eff = st.number_input(tr("อัตราสิ้นเปลือง (กม./ลิตร)"), min_value=0.1, value=12.0, step=0.5)
+    st.radio("ภาษา / Language", ["ไทย", "English"], key="lang_choice", horizontal=True,
+             label_visibility="collapsed")
+    st.subheader(tr("ตั้งค่าระบบ"))
+
+    # แต่ละหมวดพับเก็บไว้ กดเปิดเฉพาะตอนต้องใช้ (ค่าที่ตั้งไว้ยังทำงานตามปกติแม้พับอยู่)
+    with st.expander(tr("สีของหน้าเว็บ"), expanded=False):
+        st.radio(tr("โหมด"), ["มืด", "สว่าง", "ตามระบบ"], key="theme_mode", horizontal=True, format_func=trx)
+        st.radio(tr("โทนสี"), list(THEMES), key="theme_accent", horizontal=True, format_func=trx)
+
+    with st.expander(tr("จุดเริ่มต้นการเดินทาง"), expanded=False):
+        st.text_input(tr("ชื่อจุดเริ่มต้น"), key="office_name")
+        st.number_input(tr("ละติจูด"), key="office_lat", format="%.6f", step=0.0001)
+        st.number_input(tr("ลองจิจูด"), key="office_lon", format="%.6f", step=0.0001)
+        st.text_input(tr("หรือวางพิกัดจาก Google Maps"), key="paste_coord", placeholder="13.685963, 100.621783")
+        st.button(tr("ใช้พิกัดที่วาง"), on_click=apply_pasted_coord, use_container_width=True)
+        if st.session_state.get("paste_msg"):
+            st.caption(st.session_state.paste_msg)
+        st.link_button(tr("เปิดจุดเริ่มต้นใน Google Maps"),
+                       gmaps_point(st.session_state.office_lat, st.session_state.office_lon),
+                       use_container_width=True)
+        st.caption(tr("เลือกจากแผนที่ได้ที่แท็บ \"เลือกจุดเริ่มต้น\""))
+
+    with st.expander(tr("ค่าน้ำมัน"), expanded=False):
+        fuel_price = st.number_input(tr("ราคาน้ำมัน (บาท/ลิตร)"), min_value=0.0, value=33.5, step=0.1)
+        fuel_eff = st.number_input(tr("อัตราสิ้นเปลือง (กม./ลิตร)"), min_value=0.1, value=12.0, step=0.5)
     cost_per_km = fuel_price / fuel_eff
-    st.metric(tr("ค่าน้ำมันต่อกิโลเมตร"), tr("{0:.2f} บาท").format(trx(cost_per_km)))
+    st.caption(f"{tr('ค่าน้ำมันต่อกิโลเมตร')}: {tr('{0:.2f} บาท').format(trx(cost_per_km))}")
+    st.caption(f"📍 {trx(st.session_state.office_name) or tr('จุดเริ่มต้น')}")
 
 OLAT, OLON = st.session_state.office_lat, st.session_state.office_lon
 ONAME = trx(st.session_state.office_name) or tr("จุดเริ่มต้น")
