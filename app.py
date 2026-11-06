@@ -6,6 +6,7 @@ import os
 import tempfile
 import time
 import zipfile
+import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
@@ -125,6 +126,11 @@ html body .stApp [data-testid="stExpander"],html body .stApp [data-testid="stExp
       background:var(--card) !important;border:1px solid var(--line) !important;}
 html body .stApp [data-testid="stVerticalBlockBorderWrapper"]{background:var(--card);border-radius:14px;}
 html body .stApp [data-testid="stAlert"] *{color:var(--txt) !important;-webkit-text-fill-color:var(--txt) !important;}
+/* ปุ่ม ✕ สีแดงลบสถานะ */
+html body .stApp div[class*="st-key-del"] div.stButton>button{min-height:2.1rem;padding:0 .5rem;
+      background:#D32F2F !important;border:2px solid #D32F2F !important;border-radius:8px;}
+html body .stApp div[class*="st-key-del"] div.stButton>button *{color:#FFFFFF !important;
+      -webkit-text-fill-color:#FFFFFF !important;font-weight:700;}
 html body .stApp [data-testid="stDataFrame"],html body .stApp [data-testid="stDataEditor"]{
       border:1px solid var(--line);border-radius:10px;overflow:hidden;}
 """
@@ -207,6 +213,23 @@ def to_xlsx(sheets, green_col=None):
     return buf.getvalue()
 
 
+TOLL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "toll_rates.json")
+
+
+def load_toll_rates():
+    try:
+        with open(TOLL_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_toll_rates(data):
+    with open(TOLL_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+
+
+st.session_state.setdefault("toll_rates", load_toll_rates())
 st.session_state.setdefault("progress", load_progress())
 st.session_state.setdefault("trk_ver", 0)
 
@@ -290,18 +313,61 @@ def build_df(sources, meta):
 # ---------------------------------------------------------
 # Routing helpers
 # ---------------------------------------------------------
+def extract_tolls(rt):
+    """หาช่วงทางด่วนที่เส้นทางผ่าน จาก class 'toll' ของ OSRM (ข้อมูลมาจาก OpenStreetMap)"""
+    segs, cur = [], None
+
+    def close():
+        if cur and cur["km"] > 0.05:
+            names = list(dict.fromkeys(cur["names"])) or ["ทางด่วน (ไม่ทราบชื่อ)"]
+            a, b = cur["in"], cur["out"]
+            segs.append({
+                "id": f"{a[1]:.3f},{a[0]:.3f}>{b[1]:.3f},{b[0]:.3f}",
+                "label": " → ".join(names), "km": cur["km"]})
+
+    for leg in rt.get("legs", []):
+        for s in leg.get("steps", []):
+            inter = s.get("intersections") or []
+            if any("toll" in (i.get("classes") or []) for i in inter):
+                if cur is None:
+                    cur = {"km": 0.0, "names": [], "in": inter[0]["location"]}
+                cur["km"] += s.get("distance", 0) / 1000
+                cur["out"] = inter[-1]["location"]
+                nm = (s.get("name") or s.get("ref") or "").strip()
+                if nm:
+                    cur["names"].append(nm)
+            elif cur is not None:
+                close()
+                cur = None
+    if cur is not None:
+        close()
+    return segs
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_route(lon1, lat1, lon2, lat2, with_geometry=False):
+def get_route(lon1, lat1, lon2, lat2, with_geometry=False, avoid_tolls=False):
     overview, geom = ("full", "geojson") if with_geometry else ("false", "polyline")
-    url = f"{OSRM_URL}/{lon1},{lat1};{lon2},{lat2}?overview={overview}&geometries={geom}"
-    r = requests.get(url, timeout=20)
-    r.raise_for_status()
-    data = r.json()
-    if data.get("code") != "Ok" or not data.get("routes"):
+    base = (f"{OSRM_URL}/{lon1},{lat1};{lon2},{lat2}"
+            f"?overview={overview}&geometries={geom}&steps=true")
+    urls = ([base + "&exclude=toll"] if avoid_tolls else []) + [base]
+    data, avoid_ok = None, False
+    for i, u in enumerate(urls):
+        try:
+            r = requests.get(u, timeout=20)
+            if r.status_code != 200:
+                continue
+            d = r.json()
+            if d.get("code") == "Ok" and d.get("routes"):
+                data, avoid_ok = d, (avoid_tolls and i == 0)
+                break
+        except Exception:
+            continue
+    if data is None:
         raise ValueError("ไม่พบเส้นทางขับขี่ระหว่างพิกัดที่เลือก")
     rt = data["routes"][0]
     return {"distance_km": rt["distance"] / 1000, "duration_min": rt["duration"] / 60,
-            "geometry": rt.get("geometry")}
+            "geometry": rt.get("geometry"), "tolls": extract_tolls(rt),
+            "avoid_req": avoid_tolls, "avoid_ok": avoid_ok}
 
 
 def _fetch_chunk(olon, olat, pts):
@@ -390,20 +456,51 @@ def geocode(q):
 # ---------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------
-def show_route(route, cost_per_km, toll=0.0):
+def show_route(route, cost_per_km, toll=0.0, show_toll=False):
     fuel = route["distance_km"] * cost_per_km
-    cols = st.columns(4 if toll else 3)
+    show_toll = show_toll or bool(toll)
+    cols = st.columns(4 if show_toll else 3)
     cols[0].metric("ระยะทางขับขี่", f"{route['distance_km']:.2f} กม.")
     cols[1].metric("เวลาโดยประมาณ", f"{route['duration_min']:.0f} นาที")
     cols[2].metric("ค่าน้ำมันโดยประมาณ", f"{fuel:,.2f} บาท")
-    if toll:
+    if show_toll:
         cols[3].metric("รวมค่าทางด่วน", f"{fuel + toll:,.2f} บาท")
         st.caption(f"ค่าน้ำมัน {fuel:,.2f} + ค่าทางด่วน {toll:,.2f} บาท")
 
 
-def toll_input(key):
-    return st.number_input("ค่าทางด่วนเที่ยวเดียว (บาท)", min_value=0.0, value=0.0, step=5.0,
-                           key=key, help="กรอกเองตามเส้นทางที่ใช้จริง ใส่ 0 ถ้าไม่ใช้ทางด่วน")
+def toll_panel(rt, key):
+    """ตรวจจับทางด่วนที่เส้นทางผ่าน + ดึงค่าผ่านทางที่เคยบันทึกไว้ คืนค่าทางด่วนเที่ยวเดียว (บาท)"""
+    if rt.get("avoid_req") and not rt.get("avoid_ok"):
+        st.warning("เซิร์ฟเวอร์เส้นทางไม่รองรับการเลี่ยงทางด่วน ระบบแสดงเส้นทางปกติ "
+                   "(ปุ่ม Google Maps ยังเลี่ยงทางด่วนให้ตามที่เลือก)")
+    segs = rt.get("tolls") or []
+    if not segs:
+        st.caption("ไม่พบทางด่วนในเส้นทางนี้ (ค่าทางด่วน 0 บาท)")
+        return 0.0
+    rates = st.session_state.toll_rates
+    table = pd.DataFrame({
+        "ทางด่วนที่ผ่าน": [f"{s['label']} ({s['km']:.1f} กม.)" for s in segs],
+        "ค่าผ่านทาง (บาท)": [rates.get(s["id"], {}).get("fee") for s in segs],
+    })
+    sig = zlib.crc32("|".join(s["id"] for s in segs).encode())
+    st.markdown("**พบทางด่วนในเส้นทางนี้**")
+    ed = st.data_editor(
+        table, key=f"{key}_toll_{sig}", hide_index=True, use_container_width=True,
+        disabled=["ทางด่วนที่ผ่าน"],
+        column_config={"ค่าผ่านทาง (บาท)": st.column_config.NumberColumn(
+            "ค่าผ่านทาง (บาท)", min_value=0.0, step=5.0, format="%.0f")})
+    fees = [0.0 if pd.isna(v) else float(v) for v in ed["ค่าผ่านทาง (บาท)"]]
+    missing = [s for s, v in zip(segs, ed["ค่าผ่านทาง (บาท)"]) if pd.isna(v)]
+    if missing:
+        st.info(f"มี {len(missing)} ช่วงที่ยังไม่ได้ใส่ค่าผ่านทาง กรอกครั้งเดียวแล้วกดบันทึก "
+                "ครั้งต่อไปที่ผ่านทางเดิม (เข้า-ออกเดิม) ระบบจะใส่ให้อัตโนมัติ")
+    if st.button("บันทึกค่าผ่านทางนี้ไว้ใช้ครั้งต่อไป", key=f"{key}_toll_save_{sig}"):
+        for s, v in zip(segs, ed["ค่าผ่านทาง (บาท)"]):
+            if not pd.isna(v):
+                rates[s["id"]] = {"label": s["label"], "fee": float(v)}
+        save_toll_rates(rates)
+        st.toast("บันทึกค่าผ่านทางแล้ว")
+    return sum(fees)
 
 
 def plot_picker(df, label, key):
@@ -563,15 +660,14 @@ def quick_calc():
         c1, c2 = st.columns(2)
         round_trip = c1.checkbox("ไป-กลับ", key="q_round")
         trips = c2.number_input("จำนวนเที่ยว", min_value=1, value=1, step=1, key="q_trips")
-        avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True, key="q_avoid")
-        toll = toll_input("q_toll")
+        avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False, key="q_avoid")
     if st.button("คำนวณระยะทางและค่าเดินทาง", type="primary", use_container_width=True, key="q_go"):
         if not o or not d:
             st.warning("กรุณาระบุทั้งต้นทางและปลายทาง")
         else:
             try:
                 st.session_state.quick = {
-                    "route": get_route(o[1], o[0], d[1], d[0], True), "o": o, "d": d}
+                    "route": get_route(o[1], o[0], d[1], d[0], True, avoid), "o": o, "d": d}
             except Exception as exc:
                 st.error(f"ไม่สามารถคำนวณเส้นทางได้: {exc}")
     q = st.session_state.get("quick")
@@ -579,8 +675,12 @@ def quick_calc():
         rt, o2, d2 = q["route"], q["o"], q["d"]
         mult = (2 if round_trip else 1) * int(trips)
         st.caption(f"จาก {o2[2]} ไปยัง {d2[2]}")
-        show_route({"distance_km": rt["distance_km"] * mult,
-                    "duration_min": rt["duration_min"] * mult}, cost_per_km, toll * mult)
+        slot = st.container()
+        toll = toll_panel(rt, "q")
+        with slot:
+            show_route({"distance_km": rt["distance_km"] * mult,
+                        "duration_min": rt["duration_min"] * mult},
+                       cost_per_km, toll * mult, bool(rt["tolls"]))
         st.caption(f"ระยะทางเที่ยวเดียว {rt['distance_km']:.2f} กม. × {mult} เที่ยว "
                    "(ไป-กลับนับเป็น 2 เที่ยว)")
         st.link_button("เปิดนำทางใน Google Maps",
@@ -799,7 +899,7 @@ else:
         st.markdown("##### เลือกเส้นทางไปยังแปลงใน Google Maps")
         with st.container(border=True):
             gp, gn = plot_picker(df, "ที่ต้องการไป", "office_gm")
-            g_avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=True, key="office_gm_avoid")
+            g_avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False, key="office_gm_avoid")
         if "distance_km" in df.columns and pd.notna(gp["distance_km"]):
             st.caption(f"{gn}: ระยะทางขับขี่ประมาณ {gp['distance_km']:.2f} กม. "
                        f"ค่าน้ำมันประมาณ {gp['travel_cost_thb']:.2f} บาท")
@@ -813,28 +913,35 @@ else:
         with st.container(border=True):
             p1, n1 = plot_picker(df, "ต้นทาง", "pp1")
             p2, n2 = plot_picker(df, "ปลายทาง", "pp2")
-            toll = toll_input("pp_toll")
+            pp_avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False, key="pp_avoid")
         if st.button("คำนวณระยะทาง", type="primary", key="calc_pair"):
             try:
-                rt = get_route(p1["Longitude"], p1["Latitude"], p2["Longitude"], p2["Latitude"])
-                st.caption(f"จาก {n1} ไปยัง {n2}")
-                show_route(rt, cost_per_km, toll)
-                st.link_button("เปิดเส้นทางใน Google Maps",
-                               gmaps(p1["Latitude"], p1["Longitude"], p2["Latitude"], p2["Longitude"]),
-                               use_container_width=True)
+                st.session_state.pair_res = {
+                    "rt": get_route(p1["Longitude"], p1["Latitude"], p2["Longitude"], p2["Latitude"],
+                                    False, pp_avoid),
+                    "n1": n1, "n2": n2, "avoid": pp_avoid,
+                    "a": (p1["Latitude"], p1["Longitude"]), "b": (p2["Latitude"], p2["Longitude"])}
             except Exception as exc:
                 st.error(f"ไม่สามารถคำนวณเส้นทางได้: {exc}")
+        pr = st.session_state.get("pair_res")
+        if pr:
+            st.caption(f"จาก {pr['n1']} ไปยัง {pr['n2']}")
+            slot = st.container()
+            toll = toll_panel(pr["rt"], "pp")
+            with slot:
+                show_route(pr["rt"], cost_per_km, toll, bool(pr["rt"]["tolls"]))
+            st.link_button("เปิดเส้นทางใน Google Maps",
+                           gmaps(*pr["a"], *pr["b"], pr["avoid"]), use_container_width=True)
 
     # ---- Navigation map
     with t_map:
         st.markdown(f"#### เส้นทางจาก{ONAME}ไปยังแปลงเป้าหมาย")
         with st.container(border=True):
             tp, tn = plot_picker(df, "เป้าหมาย", "nav")
-            avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True)
-            nav_toll = toll_input("nav_toll")
+            avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=False)
         if st.button("ค้นหาเส้นทางและแสดงแผนที่", type="primary", key="nav_go"):
             try:
-                rt = get_route(OLON, OLAT, tp["Longitude"], tp["Latitude"], True)
+                rt = get_route(OLON, OLAT, tp["Longitude"], tp["Latitude"], True, avoid)
                 st.session_state.route_summary = rt
                 st.session_state.route_map = make_route_map(
                     (OLAT, OLON), (tp["Latitude"], tp["Longitude"]), ONAME, tn, rt["geometry"])
@@ -842,7 +949,11 @@ else:
             except Exception as exc:
                 st.error(f"ไม่สามารถสร้างเส้นทางได้: {exc}")
         if st.session_state.route_summary:
-            show_route(st.session_state.route_summary, cost_per_km, nav_toll)
+            rs = st.session_state.route_summary
+            slot = st.container()
+            nav_toll = toll_panel(rs, "nav")
+            with slot:
+                show_route(rs, cost_per_km, nav_toll, bool(rs["tolls"]))
             st.link_button("เปิดนำทางใน Google Maps", st.session_state.route_link,
                            use_container_width=True)
             st_folium(st.session_state.route_map, use_container_width=True, height=520,
@@ -917,52 +1028,26 @@ else:
             st.session_state.trk_msg = "บันทึกสถานะแล้ว"
             st.rerun()
 
-        with st.expander("ลบ / ยกเลิกสถานะที่บันทึกผิด"):
-            ver = st.session_state.trk_ver
-
-            def _finish(msg):
-                save_progress(prog)
-                st.session_state.trk_ver += 1
-                st.session_state.trk_msg = msg
-                st.rerun()
-
-            # 1) ยกเลิกเฉพาะแปลงที่ติ๊กผิด
-            done_rows = trk[trk["เสร็จแล้ว"]]
-            labels = {f"{v} แปลง {a}": k for v, a, k in
-                      zip(done_rows["Village"], done_rows["Attribute"], done_rows["_key"])}
-            undo = st.multiselect("เลือกแปลงที่ต้องการยกเลิกสถานะเสร็จ", list(labels),
-                                  key=f"trk_undo_{ver}")
-            if st.button("ยกเลิกแปลงที่เลือก", key=f"trk_undo_go_{ver}", disabled=not undo,
-                         use_container_width=True):
-                for p in undo:
-                    prog.pop(labels[p], None)
-                _finish(f"ยกเลิกสถานะ {len(undo)} แปลงแล้ว")
-
-            st.divider()
-            # 2) ล้างทั้งหมู่บ้าน
-            vclear = st.multiselect("ล้างสถานะทั้งหมู่บ้าน", sorted(df["Village"].unique()),
-                                    key=f"trk_vclear_{ver}")
-            ok_v = st.checkbox("ยืนยันการล้างหมู่บ้านที่เลือก", key=f"trk_vok_{ver}")
-            if st.button("ล้างสถานะหมู่บ้านที่เลือก", key=f"trk_vgo_{ver}",
-                         disabled=not (vclear and ok_v), use_container_width=True):
-                for k in [k for k in prog if k.split("|", 1)[0] in vclear]:
-                    prog.pop(k)
-                _finish(f"ล้างสถานะ {len(vclear)} หมู่บ้านแล้ว")
-
-            st.divider()
-            # 3) ล้างทั้งหมด
-            ok_all = st.checkbox("ยืนยันการล้างสถานะทั้งหมด (ย้อนกลับไม่ได้)", key=f"trk_aok_{ver}")
-            if st.button("ล้างสถานะทั้งหมด", key=f"trk_ago_{ver}",
-                         disabled=not ok_all, use_container_width=True):
-                prog.clear()
-                _finish("ล้างสถานะทั้งหมดแล้ว")
-
-        # แปลงที่เสร็จแล้ว (สีเขียว)
-        done_view = trk[trk["เสร็จแล้ว"]][["Village", "Group", "Attribute", "วันที่เสร็จ", "หมายเหตุ"]]
+        # แปลงที่เสร็จแล้ว (กด ✕ แดงท้ายแถวเพื่อยกเลิกสถานะที่ติ๊กผิด)
+        done_view = trk[trk["เสร็จแล้ว"]].drop_duplicates("_key")
         st.markdown(f"##### แปลงที่เสร็จแล้ว ({len(done_view):,} แปลง)")
         if len(done_view):
-            st.dataframe(done_view.style.apply(lambda r: [GREEN] * len(r), axis=1),
-                         use_container_width=True, hide_index=True)
+            W = [3, 1.3, 2, 2.5, 0.8]
+            for c, t in zip(st.columns(W), ["หมู่บ้าน", "เลขแปลง", "วันที่เสร็จ", "หมายเหตุ", "ลบ"]):
+                c.markdown(f"**{t}**")
+            with st.container(height=420):
+                for _, r in done_view.iterrows():
+                    c = st.columns(W)
+                    c[0].markdown(r["Village"])
+                    c[1].markdown(str(r["Attribute"]))
+                    c[2].markdown(r["วันที่เสร็จ"])
+                    c[3].markdown(r["หมายเหตุ"] or "-")
+                    if c[4].button("✕", key=f"del_{r['_key']}", help="ยกเลิกสถานะเสร็จของแปลงนี้"):
+                        prog.pop(r["_key"], None)
+                        save_progress(prog)
+                        st.session_state.trk_ver += 1
+                        st.session_state.trk_msg = f"ยกเลิกสถานะ {r['Village']} แปลง {r['Attribute']} แล้ว"
+                        st.rerun()
         else:
             st.caption("ยังไม่มีแปลงที่ทำเครื่องหมายว่าเสร็จ")
 
