@@ -392,11 +392,20 @@ def geocode(q):
 # ---------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------
-def show_route(route, cost_per_km):
-    a, b, c = st.columns(3)
-    a.metric("ระยะทางขับขี่", f"{route['distance_km']:.2f} กม.")
-    b.metric("เวลาโดยประมาณ", f"{route['duration_min']:.0f} นาที")
-    c.metric("ค่าน้ำมันโดยประมาณ", f"{route['distance_km'] * cost_per_km:,.2f} บาท")
+def show_route(route, cost_per_km, toll=0.0):
+    fuel = route["distance_km"] * cost_per_km
+    cols = st.columns(4 if toll else 3)
+    cols[0].metric("ระยะทางขับขี่", f"{route['distance_km']:.2f} กม.")
+    cols[1].metric("เวลาโดยประมาณ", f"{route['duration_min']:.0f} นาที")
+    cols[2].metric("ค่าน้ำมันโดยประมาณ", f"{fuel:,.2f} บาท")
+    if toll:
+        cols[3].metric("รวมค่าทางด่วน", f"{fuel + toll:,.2f} บาท")
+        st.caption(f"ค่าน้ำมัน {fuel:,.2f} + ค่าทางด่วน {toll:,.2f} บาท")
+
+
+def toll_input(key):
+    return st.number_input("ค่าทางด่วนเที่ยวเดียว (บาท)", min_value=0.0, value=0.0, step=5.0,
+                           key=key, help="กรอกเองตามเส้นทางที่ใช้จริง ใส่ 0 ถ้าไม่ใช้ทางด่วน")
 
 
 def plot_picker(df, label, key):
@@ -552,6 +561,10 @@ def quick_calc():
         round_trip = c1.checkbox("ไป-กลับ", key="q_round")
         trips = c2.number_input("จำนวนเที่ยว", min_value=1, value=1, step=1, key="q_trips")
         avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True, key="q_avoid")
+        avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True, key="q_avoid")
+        toll = toll_input("q_toll")
+        show_route({"distance_km": rt["distance_km"] * mult,
+                    "duration_min": rt["duration_min"] * mult}, cost_per_km, toll * mult)
     if st.button("คำนวณระยะทางและค่าเดินทาง", type="primary", use_container_width=True, key="q_go"):
         if not o or not d:
             st.warning("กรุณาระบุทั้งต้นทางและปลายทาง")
@@ -805,6 +818,13 @@ else:
                                use_container_width=True)
             except Exception as exc:
                 st.error(f"ไม่สามารถคำนวณเส้นทางได้: {exc}")
+        with st.container(border=True):
+            p1, n1 = plot_picker(df, "ต้นทาง", "pp1")
+            p2, n2 = plot_picker(df, "ปลายทาง", "pp2")
+            toll = toll_input("pp_toll")
+
+        show_route(rt, cost_per_km, toll)
+
 
     # ---- Navigation map
     with t_map:
@@ -827,7 +847,11 @@ else:
                            use_container_width=True)
             st_folium(st.session_state.route_map, use_container_width=True, height=520,
                       key="route_map_view", returned_objects=[])
-
+        with st.container(border=True):
+            tp, tn = plot_picker(df, "เป้าหมาย", "nav")
+            avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True)
+            nav_toll = toll_input("nav_toll")
+        show_route(st.session_state.route_summary, cost_per_km, nav_toll)
     # ---- Progress tracking + report
     with t_track:
         prog = st.session_state.progress
@@ -896,7 +920,46 @@ else:
             st.session_state.trk_ver += 1
             st.session_state.trk_msg = "บันทึกสถานะแล้ว"
             st.rerun()
+        with st.expander("ลบ / ยกเลิกสถานะที่บันทึกผิด"):
+            ver = st.session_state.trk_ver
 
+            def _finish(msg):
+                save_progress(prog)
+                st.session_state.trk_ver += 1
+                st.session_state.trk_msg = msg
+                st.rerun()
+
+            # 1) ยกเลิกเฉพาะแปลงที่ติ๊กผิด
+            done_rows = trk[trk["เสร็จแล้ว"]]
+            labels = {f"{v} แปลง {a}": k for v, a, k in
+                      zip(done_rows["Village"], done_rows["Attribute"], done_rows["_key"])}
+            pick = st.multiselect("เลือกแปลงที่ต้องการยกเลิกสถานะเสร็จ", list(labels),
+                                  key=f"trk_undo_{ver}")
+            if st.button("ยกเลิกแปลงที่เลือก", key=f"trk_undo_go_{ver}", disabled=not pick,
+                         use_container_width=True):
+                for p in pick:
+                    prog.pop(labels[p], None)
+                _finish(f"ยกเลิกสถานะ {len(pick)} แปลงแล้ว")
+
+            st.divider()
+            # 2) ล้างทั้งหมู่บ้าน
+            vclear = st.multiselect("ล้างสถานะทั้งหมู่บ้าน", sorted(df["Village"].unique()),
+                                    key=f"trk_vclear_{ver}")
+            ok_v = st.checkbox("ยืนยันการล้างหมู่บ้านที่เลือก", key=f"trk_vok_{ver}")
+            if st.button("ล้างสถานะหมู่บ้านที่เลือก", key=f"trk_vgo_{ver}",
+                         disabled=not (vclear and ok_v), use_container_width=True):
+                for k in [k for k in prog if k.split("|", 1)[0] in vclear]:
+                    prog.pop(k)
+                _finish(f"ล้างสถานะ {len(vclear)} หมู่บ้านแล้ว")
+
+            st.divider()
+            # 3) ล้างทั้งหมด
+            ok_all = st.checkbox("ยืนยันการล้างสถานะทั้งหมด (ย้อนกลับไม่ได้)", key=f"trk_aok_{ver}")
+            if st.button("ล้างสถานะทั้งหมด", key=f"trk_ago_{ver}",
+                         disabled=not ok_all, use_container_width=True):
+                prog.clear()
+                _finish("ล้างสถานะทั้งหมดแล้ว")
+                
         # แปลงที่เสร็จแล้ว (สีเขียว)
         done_view = trk[trk["เสร็จแล้ว"]][["Village", "Group", "Attribute", "วันที่เสร็จ", "หมายเหตุ"]]
         st.markdown(f"##### แปลงที่เสร็จแล้ว ({len(done_view):,} แปลง)")
