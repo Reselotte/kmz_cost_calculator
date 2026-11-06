@@ -1,18 +1,18 @@
-# pip install streamlit fiona geopandas pandas requests folium streamlit-folium
+# pip install streamlit pyogrio geopandas pandas requests folium streamlit-folium openpyxl
 import glob
+import io
+import json
 import os
 import tempfile
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-import io
-import json
 from datetime import datetime, timedelta, timezone
-import pyogrio
+
 import folium
 import geopandas as gpd
 import pandas as pd
+import pyogrio
 import requests
 import streamlit as st
 from streamlit_folium import st_folium
@@ -20,7 +20,7 @@ from streamlit_folium import st_folium
 st.set_page_config(page_title="ระบบจัดการแปลงยาสูบ", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------
-# Theme (สว่าง / มืด) : สลับทั้งหน้าเว็บ รวมถึงตารางข้อมูล
+# Theme (สว่าง / มืด) : ตามเมนู Settings ของ Streamlit
 # ---------------------------------------------------------
 LIGHT = dict(bg="#F7F3EA", card="#FFFFFF", txt="#23302A", mut="#4A5A50", line="#DDD3BE",
              pri="#2E6B4F", head="#1F4D38", soft="#E9F1EA", side="#EFE8D8",
@@ -29,7 +29,7 @@ DARK = dict(bg="#111A15", card="#1B2922", txt="#EDF3EA", mut="#B4C3B9", line="#3
             pri="#4FA77B", head="#9BE0BC", soft="#24372D", side="#0C130F",
             inp="#16221C", inpb="#5B7266", gold="#E2A93F", btn="#3C8A64")
 
-# อ่านโหมดสว่าง/มืดจากเมนู Settings ของ Streamlit (toolbar มุมขวาบน) ต้องใช้ Streamlit >= 1.46
+# ต้องใช้ Streamlit >= 1.46
 try:
     IS_DARK = st.context.theme.type == "dark"
 except Exception:
@@ -129,15 +129,9 @@ html body .stApp [data-testid="stDataFrame"],html body .stApp [data-testid="stDa
       border:1px solid var(--line);border-radius:10px;overflow:hidden;}
 """
 
-# ตารางข้อมูลเป็น canvas (CSS เปลี่ยนสีตรง ๆ ไม่ได้) -> กลับสีทั้งก้อนเมื่ออยู่โหมดมืด
-# ต้องคู่กับ .streamlit/config.toml ที่ตั้ง base = "light"
-DF_DARK_CSS = ""  # ตารางใช้ธีมของ Streamlit เองอยู่แล้ว ไม่ต้องกลับสี
-
 vars_css = ":root{" + "".join(f"--{k}:{v};" for k, v in P.items()) + \
            f"color-scheme:{'dark' if IS_DARK else 'light'};}}"
-st.markdown(f"<style>{vars_css}{STATIC_CSS}{DF_DARK_CSS if IS_DARK else ''}</style>",
-            unsafe_allow_html=True)
-
+st.markdown(f"<style>{vars_css}{STATIC_CSS}</style>", unsafe_allow_html=True)
 
 OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
 OSRM_TABLE = "https://router.project-osrm.org/table/v1/driving"
@@ -151,7 +145,16 @@ DEFAULTS = {
 for k, v in DEFAULTS.items():
     st.session_state.setdefault(k, v)
 
+# ---------------------------------------------------------
+# Progress tracking helpers
+# ---------------------------------------------------------
 PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plot_progress.json")
+GREEN = "background-color:#2E8B57;color:#FFFFFF"
+TH_TZ = timezone(timedelta(hours=7))
+
+
+def now_th():
+    return datetime.now(TH_TZ)
 
 
 def load_progress():
@@ -181,18 +184,9 @@ def tracking_df(df, prog):
     return t
 
 
-GREEN = "background-color:#2E8B57;color:#FFFFFF"
-
-TH_TZ = timezone(timedelta(hours=7))
-
-
-def now_th():
-    return datetime.now(TH_TZ)
-
-
 def to_xlsx(sheets, green_col=None):
     """sheets = {ชื่อชีต: DataFrame} -> bytes ของไฟล์ xlsx (ตั้งความกว้างคอลัมน์ให้อัตโนมัติ)"""
-    from openpyxl.styles import PatternFill, Font
+    from openpyxl.styles import Font, PatternFill
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xw:
         for name, d in sheets.items():
@@ -212,8 +206,11 @@ def to_xlsx(sheets, green_col=None):
                             cell.font = Font(color="FFFFFF")
     return buf.getvalue()
 
+
 st.session_state.setdefault("progress", load_progress())
 st.session_state.setdefault("trk_ver", 0)
+
+
 # ---------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------
@@ -240,6 +237,7 @@ def read_kmz_file(file_obj, name):
     except Exception as exc:
         errors.append(f"{name}: {exc}")
     return loaded, errors
+
 
 def load_sources(items):
     """items = [(filename, file_object)] -> one source per KMZ file."""
@@ -326,7 +324,7 @@ def _fetch_chunk(olon, olat, pts):
 
 
 def office_distances(olon, olat, lons, lats, on_progress=None, chunk=90, workers=4):
-    """คำนวณระยะทางจากจุดเดียวไปทุกแปลง แบบแบ่งก้อน + ยิงขนาน (เร็วกว่าทีละแปลงหลายสิบเท่า)"""
+    """คำนวณระยะทางจากจุดเดียวไปทุกแปลง แบบแบ่งก้อน + ยิงขนาน"""
     pts = list(zip(lons, lats))
     chunks = [pts[i:i + chunk] for i in range(0, len(pts), chunk)]
     out = [None] * len(chunks)
@@ -501,6 +499,11 @@ with st.sidebar:
 
 OLAT, OLON = st.session_state.office_lat, st.session_state.office_lon
 ONAME = st.session_state.office_name or "จุดเริ่มต้น"
+
+
+# ---------------------------------------------------------
+# Quick calculator (ไม่ต้องใช้ไฟล์ KMZ)
+# ---------------------------------------------------------
 def parse_coord(s):
     try:
         lat, lon = [float(x) for x in s.replace(" ", "").split(",")]
@@ -561,10 +564,7 @@ def quick_calc():
         round_trip = c1.checkbox("ไป-กลับ", key="q_round")
         trips = c2.number_input("จำนวนเที่ยว", min_value=1, value=1, step=1, key="q_trips")
         avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True, key="q_avoid")
-        avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True, key="q_avoid")
         toll = toll_input("q_toll")
-        show_route({"distance_km": rt["distance_km"] * mult,
-                    "duration_min": rt["duration_min"] * mult}, cost_per_km, toll * mult)
     if st.button("คำนวณระยะทางและค่าเดินทาง", type="primary", use_container_width=True, key="q_go"):
         if not o or not d:
             st.warning("กรุณาระบุทั้งต้นทางและปลายทาง")
@@ -580,13 +580,14 @@ def quick_calc():
         mult = (2 if round_trip else 1) * int(trips)
         st.caption(f"จาก {o2[2]} ไปยัง {d2[2]}")
         show_route({"distance_km": rt["distance_km"] * mult,
-                    "duration_min": rt["duration_min"] * mult}, cost_per_km)
+                    "duration_min": rt["duration_min"] * mult}, cost_per_km, toll * mult)
         st.caption(f"ระยะทางเที่ยวเดียว {rt['distance_km']:.2f} กม. × {mult} เที่ยว "
                    "(ไป-กลับนับเป็น 2 เที่ยว)")
         st.link_button("เปิดนำทางใน Google Maps",
                        gmaps(o2[0], o2[1], d2[0], d2[1], avoid), use_container_width=True)
         st_folium(make_route_map((o2[0], o2[1]), (d2[0], d2[1]), o2[2], d2[2], rt["geometry"]),
                   use_container_width=True, height=520, key="quick_map", returned_objects=[])
+
 
 # =========================================================
 # PAGE 1: upload
@@ -620,19 +621,23 @@ if st.session_state.page == "upload":
                 st.error("ไม่พบข้อมูลแปลงที่ใช้งานได้ในไฟล์ที่เลือก")
     for e in st.session_state.errors:
         st.warning(e)
-        st.divider()
+    st.divider()
     if st.button("คำนวณระยะทางและค่าเดินทางทั่วไป (ไม่ต้องใช้ไฟล์ KMZ)",
                  use_container_width=True, key="goto_quick"):
         st.session_state.page = "quick"
         st.rerun()
 
-    elif st.session_state.page == "quick":
-        header(0)
-        st.subheader("คำนวณระยะทางและค่าเดินทางทั่วไป")
-        quick_calc()
+# =========================================================
+# PAGE: quick calculator (ไม่ต้องใช้ไฟล์ KMZ)
+# =========================================================
+elif st.session_state.page == "quick":
+    header(0)
+    st.subheader("คำนวณระยะทางและค่าเดินทางทั่วไป")
+    quick_calc()
     if st.button("ย้อนกลับ", use_container_width=True, key="q_back"):
         st.session_state.page = "workspace" if st.session_state.df is not None else "upload"
         st.rerun()
+
 # =========================================================
 # PAGE 2: classify villages
 # =========================================================
@@ -790,7 +795,7 @@ else:
             st.dataframe(df[cols], use_container_width=True, hide_index=True)
         else:
             st.caption("ยังไม่มีผลการคำนวณ")
-            
+
         st.markdown("##### เลือกเส้นทางไปยังแปลงใน Google Maps")
         with st.container(border=True):
             gp, gn = plot_picker(df, "ที่ต้องการไป", "office_gm")
@@ -808,23 +813,17 @@ else:
         with st.container(border=True):
             p1, n1 = plot_picker(df, "ต้นทาง", "pp1")
             p2, n2 = plot_picker(df, "ปลายทาง", "pp2")
+            toll = toll_input("pp_toll")
         if st.button("คำนวณระยะทาง", type="primary", key="calc_pair"):
             try:
                 rt = get_route(p1["Longitude"], p1["Latitude"], p2["Longitude"], p2["Latitude"])
                 st.caption(f"จาก {n1} ไปยัง {n2}")
-                show_route(rt, cost_per_km)
+                show_route(rt, cost_per_km, toll)
                 st.link_button("เปิดเส้นทางใน Google Maps",
                                gmaps(p1["Latitude"], p1["Longitude"], p2["Latitude"], p2["Longitude"]),
                                use_container_width=True)
             except Exception as exc:
                 st.error(f"ไม่สามารถคำนวณเส้นทางได้: {exc}")
-        with st.container(border=True):
-            p1, n1 = plot_picker(df, "ต้นทาง", "pp1")
-            p2, n2 = plot_picker(df, "ปลายทาง", "pp2")
-            toll = toll_input("pp_toll")
-
-        show_route(rt, cost_per_km, toll)
-
 
     # ---- Navigation map
     with t_map:
@@ -832,6 +831,7 @@ else:
         with st.container(border=True):
             tp, tn = plot_picker(df, "เป้าหมาย", "nav")
             avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True)
+            nav_toll = toll_input("nav_toll")
         if st.button("ค้นหาเส้นทางและแสดงแผนที่", type="primary", key="nav_go"):
             try:
                 rt = get_route(OLON, OLAT, tp["Longitude"], tp["Latitude"], True)
@@ -842,16 +842,12 @@ else:
             except Exception as exc:
                 st.error(f"ไม่สามารถสร้างเส้นทางได้: {exc}")
         if st.session_state.route_summary:
-            show_route(st.session_state.route_summary, cost_per_km)
+            show_route(st.session_state.route_summary, cost_per_km, nav_toll)
             st.link_button("เปิดนำทางใน Google Maps", st.session_state.route_link,
                            use_container_width=True)
             st_folium(st.session_state.route_map, use_container_width=True, height=520,
                       key="route_map_view", returned_objects=[])
-        with st.container(border=True):
-            tp, tn = plot_picker(df, "เป้าหมาย", "nav")
-            avoid = st.checkbox("หลีกเลี่ยงทางด่วนใน Google Maps", value=True)
-            nav_toll = toll_input("nav_toll")
-        show_route(st.session_state.route_summary, cost_per_km, nav_toll)
+
     # ---- Progress tracking + report
     with t_track:
         prog = st.session_state.progress
@@ -920,6 +916,7 @@ else:
             st.session_state.trk_ver += 1
             st.session_state.trk_msg = "บันทึกสถานะแล้ว"
             st.rerun()
+
         with st.expander("ลบ / ยกเลิกสถานะที่บันทึกผิด"):
             ver = st.session_state.trk_ver
 
@@ -933,13 +930,13 @@ else:
             done_rows = trk[trk["เสร็จแล้ว"]]
             labels = {f"{v} แปลง {a}": k for v, a, k in
                       zip(done_rows["Village"], done_rows["Attribute"], done_rows["_key"])}
-            pick = st.multiselect("เลือกแปลงที่ต้องการยกเลิกสถานะเสร็จ", list(labels),
+            undo = st.multiselect("เลือกแปลงที่ต้องการยกเลิกสถานะเสร็จ", list(labels),
                                   key=f"trk_undo_{ver}")
-            if st.button("ยกเลิกแปลงที่เลือก", key=f"trk_undo_go_{ver}", disabled=not pick,
+            if st.button("ยกเลิกแปลงที่เลือก", key=f"trk_undo_go_{ver}", disabled=not undo,
                          use_container_width=True):
-                for p in pick:
+                for p in undo:
                     prog.pop(labels[p], None)
-                _finish(f"ยกเลิกสถานะ {len(pick)} แปลงแล้ว")
+                _finish(f"ยกเลิกสถานะ {len(undo)} แปลงแล้ว")
 
             st.divider()
             # 2) ล้างทั้งหมู่บ้าน
@@ -959,7 +956,7 @@ else:
                          disabled=not ok_all, use_container_width=True):
                 prog.clear()
                 _finish("ล้างสถานะทั้งหมดแล้ว")
-                
+
         # แปลงที่เสร็จแล้ว (สีเขียว)
         done_view = trk[trk["เสร็จแล้ว"]][["Village", "Group", "Attribute", "วันที่เสร็จ", "หมายเหตุ"]]
         st.markdown(f"##### แปลงที่เสร็จแล้ว ({len(done_view):,} แปลง)")
@@ -1006,6 +1003,8 @@ else:
             st.session_state.route_map = st.session_state.route_summary = None
             st.success("อัปเดตการจำแนกหมู่บ้านแล้ว (ต้องคำนวณระยะทางทั้งหมดใหม่)")
             st.rerun()
+
+    # ---- Quick calculator
     with t_quick:
         quick_calc()
 
