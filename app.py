@@ -6,7 +6,7 @@ import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import fiona
+import pyogrio
 import folium
 import geopandas as gpd
 import pandas as pd
@@ -167,8 +167,10 @@ def read_kmz_file(file_obj, name):
                     with open(path, "wb") as f:
                         f.write(kmz.read(kml))
                     try:
-                        for layer in fiona.listlayers(path):
-                            gdf = gpd.read_file(path, driver="KML", layer=layer)
+                        layers = pyogrio.list_layers(path)
+                        for layer_info in layers:
+                            layer_name = layer_info[0] if isinstance(layer_info, tuple) else layer_info
+                            gdf = gpd.read_file(path, layer=layer_name, engine="pyogrio")
                             if not gdf.empty:
                                 loaded.append(gdf)
                     except Exception as exc:
@@ -176,7 +178,6 @@ def read_kmz_file(file_obj, name):
     except Exception as exc:
         errors.append(f"{name}: {exc}")
     return loaded, errors
-
 
 def load_sources(items):
     """items = [(filename, file_object)] -> one source per KMZ file."""
