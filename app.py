@@ -617,6 +617,17 @@ else:
             st.dataframe(df[cols], use_container_width=True, hide_index=True)
         else:
             st.caption("ยังไม่มีผลการคำนวณ")
+            
+        st.markdown("##### เลือกเส้นทางไปยังแปลงใน Google Maps")
+        with st.container(border=True):
+            gp, gn = plot_picker(df, "ที่ต้องการไป", "office_gm")
+            g_avoid = st.checkbox("หลีกเลี่ยงทางด่วน", value=True, key="office_gm_avoid")
+        if "distance_km" in df.columns and pd.notna(gp["distance_km"]):
+            st.caption(f"{gn}: ระยะทางขับขี่ประมาณ {gp['distance_km']:.2f} กม. "
+                       f"ค่าน้ำมันประมาณ {gp['travel_cost_thb']:.2f} บาท")
+        st.link_button(f"เปิดเส้นทางจาก{ONAME}ไป {gn} ใน Google Maps",
+                       gmaps(OLAT, OLON, gp["Latitude"], gp["Longitude"], g_avoid),
+                       use_container_width=True)
 
     # ---- Plot to plot (any village)
     with t_pair:
