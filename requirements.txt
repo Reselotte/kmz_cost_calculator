@@ -1,3 +1,4 @@
+streamlit>=1.46
 geopandas
 pyogrio
 shapely
@@ -6,3 +7,4 @@ folium
 streamlit-folium
 pandas
 requests
+openpyxl
