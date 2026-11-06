@@ -6,8 +6,9 @@ import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import pyogrio
 import folium
 import geopandas as gpd
@@ -181,6 +182,35 @@ def tracking_df(df, prog):
 
 
 GREEN = "background-color:#2E8B57;color:#FFFFFF"
+
+TH_TZ = timezone(timedelta(hours=7))
+
+
+def now_th():
+    return datetime.now(TH_TZ)
+
+
+def to_xlsx(sheets, green_col=None):
+    """sheets = {ชื่อชีต: DataFrame} -> bytes ของไฟล์ xlsx (ตั้งความกว้างคอลัมน์ให้อัตโนมัติ)"""
+    from openpyxl.styles import PatternFill, Font
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+        for name, d in sheets.items():
+            d.to_excel(xw, sheet_name=name, index=False)
+            ws = xw.sheets[name]
+            ws.freeze_panes = "A2"
+            for i, col in enumerate(d.columns, 1):
+                w = max([len(str(col))] + [len(str(v)) for v in d[col].head(500)])
+                ws.column_dimensions[ws.cell(1, i).column_letter].width = min(max(w + 3, 10), 40)
+            if green_col and green_col in d.columns:
+                gi = list(d.columns).index(green_col)
+                fill = PatternFill("solid", fgColor="2E8B57")
+                for row in ws.iter_rows(min_row=2):
+                    if row[gi].value == "เสร็จแล้ว":
+                        for cell in row:
+                            cell.fill = fill
+                            cell.font = Font(color="FFFFFF")
+    return buf.getvalue()
 
 st.session_state.setdefault("progress", load_progress())
 st.session_state.setdefault("trk_ver", 0)
@@ -853,7 +883,7 @@ else:
                 "เสร็จแล้ว": st.column_config.CheckboxColumn("เสร็จแล้ว"),
             })
         if st.button("บันทึกสถานะ", type="primary", use_container_width=True, key="trk_save"):
-            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            now = now_th().strftime("%Y-%m-%d %H:%M")
             for _, r in edited.iterrows():
                 k = r["_key"]
                 note = "" if pd.isna(r["หมายเหตุ"]) else str(r["หมายเหตุ"]).strip()
@@ -878,20 +908,30 @@ else:
 
         # รายงาน
         st.markdown("##### รายงาน")
-        st.caption(f"ณ วันที่ {datetime.now().strftime('%d/%m/%Y %H:%M')} "
+        st.caption(f"ณ วันที่ {now_th().strftime('%d/%m/%Y %H:%M')} "
                    f"เสร็จแล้ว {done_n:,} จาก {total:,} แปลง "
                    f"({int((summ['คงเหลือ'] == 0).sum())} จาก {len(summ)} หมู่บ้านเสร็จครบ)")
         rep = trk.drop(columns=["_key"]).copy()
         rep["สถานะ"] = rep["เสร็จแล้ว"].map({True: "เสร็จแล้ว", False: "ยังไม่เสร็จ"})
         rep = rep.drop(columns=["เสร็จแล้ว"])
-        stamp = datetime.now().strftime("%Y%m%d_%H%M")
+        stamp = now_th().strftime("%Y%m%d_%H%M")
         d1, d2 = st.columns(2)
-        d1.download_button("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (CSV)",
-                           summ.to_csv(index=False).encode("utf-8-sig"),
-                           f"report_summary_{stamp}.csv", "text/csv", use_container_width=True)
-        d2.download_button("ดาวน์โหลดรายงานรายแปลง (CSV)",
-                           rep.to_csv(index=False).encode("utf-8-sig"),
-                           f"report_plots_{stamp}.csv", "text/csv", use_container_width=True)
+        try:
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            d1.download_button("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (Excel)",
+                               to_xlsx({"สรุปรายหมู่บ้าน": summ}),
+                               f"report_summary_{stamp}.xlsx", mime, use_container_width=True)
+            d2.download_button("ดาวน์โหลดรายงานรายแปลง (Excel)",
+                               to_xlsx({"รายงานรายแปลง": rep}, green_col="สถานะ"),
+                               f"report_plots_{stamp}.xlsx", mime, use_container_width=True)
+        except ImportError:
+            st.warning("ยังไม่ได้ติดตั้ง openpyxl จึงดาวน์โหลดเป็น CSV แทน (ติดตั้งด้วย pip install openpyxl)")
+            d1.download_button("ดาวน์โหลดรายงานสรุปรายหมู่บ้าน (CSV)",
+                               summ.to_csv(index=False).encode("utf-8-sig"),
+                               f"report_summary_{stamp}.csv", "text/csv", use_container_width=True)
+            d2.download_button("ดาวน์โหลดรายงานรายแปลง (CSV)",
+                               rep.to_csv(index=False).encode("utf-8-sig"),
+                               f"report_plots_{stamp}.csv", "text/csv", use_container_width=True)
 
     # ---- Re-classify villages any time
     with t_vil:
