@@ -147,6 +147,7 @@ EN = {
     "Note: distance and time are estimates from OSRM; fuel cost is calculated from the values set in the sidebar",
 # ---- templates (f-strings) ----
 "{0:.2f} กม.": "{0:.2f} km", "{0:.0f} นาที": "{0:.0f} min",
+"{0} ชั่วโมง": "{0} hr", "{0} ชั่วโมง {1} นาที": "{0} hr {1} min",
 "{0:,.2f} บาท": "{0:,.2f} THB", "{0:.2f} บาท": "{0:.2f} THB",
 "หมู่บ้าน{0}": "Village ({0})", "เลขแปลง{0}": "Plot no. ({0})", "{0} แปลง {1}": "{0} plot {1}",
 "ค่าน้ำมัน {0:,.2f} + ค่าทางด่วน {1:,.2f} บาท": "Fuel {0:,.2f} + tolls {1:,.2f} THB",
@@ -193,6 +194,18 @@ def tr(s):
 def trx(x):
     """แปลค่าที่ใช้แสดงผล (ตัวเลือก/ค่าที่แทรกในประโยค) เฉพาะที่ตรงทั้งข้อความ"""
     return tr(str(x) if isinstance(x, BaseException) else x)
+
+
+def fmt_duration(minutes):
+    """แปลงจำนวนนาทีเป็นข้อความเวลา: ต่ำกว่า 60 นาทีแสดงเป็นนาที, ตั้งแต่ 60 ขึ้นไปแสดงเป็นชั่วโมง+นาที
+    เช่น 45 -> 45 นาที, 60 -> 1 ชั่วโมง, 202 -> 3 ชั่วโมง 22 นาที"""
+    total = int(round(float(minutes)))  # ปัดเป็นนาทีเต็มก่อน กัน 59.6 กลายเป็น "60 นาที"
+    h, m = divmod(total, 60)
+    if h == 0:
+        return tr("{0:.0f} นาที").format(trx(m))
+    if m == 0:
+        return tr("{0} ชั่วโมง").format(trx(h))
+    return tr("{0} ชั่วโมง {1} นาที").format(trx(h), trx(m))
 
 
 def dfx(d, vals_col=None):
@@ -771,7 +784,7 @@ def show_route(route, cost_per_km, toll=0.0, show_toll=False):
     show_toll = show_toll or bool(toll)
     cols = st.columns(4 if show_toll else 3)
     cols[0].metric(tr("ระยะทางขับขี่"), tr("{0:.2f} กม.").format(trx(route['distance_km'])))
-    cols[1].metric(tr("เวลาโดยประมาณ"), tr("{0:.0f} นาที").format(trx(route['duration_min'])))
+    cols[1].metric(tr("เวลาโดยประมาณ"), fmt_duration(route['duration_min']))
     cols[2].metric(tr("ค่าน้ำมันโดยประมาณ"), tr("{0:,.2f} บาท").format(trx(fuel)))
     if show_toll:
         cols[3].metric(tr("รวมค่าทางด่วน"), tr("{0:,.2f} บาท").format(trx(fuel + toll)))
